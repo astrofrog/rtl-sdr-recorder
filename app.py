@@ -105,20 +105,19 @@ class RadioRecorder:
                 # Read samples and compute FFT
                 samples = self.sdr.read_samples(CHUNK_SAMPLES)
                 spectrum = np.abs(np.fft.fftshift(np.fft.fft(samples, n=FFT_LEN))) ** 2
-                spectrum_db = 10 * np.log10(spectrum + 1e-12)
 
-                # Store current spectrum and add to buffer for median
+                # Store current spectrum (linear) and add to buffer for median
                 with self.spectrum_lock:
-                    self.last_spectrum = spectrum_db
-                    self.spectrum_buffer.append(spectrum_db)
-                    # Compute median spectrum from buffer
+                    self.last_spectrum = spectrum
+                    self.spectrum_buffer.append(spectrum)
+                    # Compute median spectrum from buffer (in linear space)
                     if len(self.spectrum_buffer) > 0:
                         self.median_spectrum = np.median(self.spectrum_buffer, axis=0)
 
-                # Save to file with timestamp
+                # Save to file with timestamp (raw linear spectrum)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
                 filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}.npy")
-                np.save(filename, spectrum_db)
+                np.save(filename, spectrum)
 
                 print(f"Saved spectrum: {filename}")
 
@@ -128,7 +127,7 @@ class RadioRecorder:
                 break
 
     def get_spectrum_plot(self):
-        """Return current and median spectrum data with frequency labels"""
+        """Return current and median spectrum data with frequency labels (converted to dB for display)"""
         with self.spectrum_lock:
             if self.last_spectrum is None:
                 return None
@@ -136,9 +135,13 @@ class RadioRecorder:
             current = self.last_spectrum.copy()
             median = self.median_spectrum.copy() if self.median_spectrum is not None else None
 
+        # Convert to dB for display
+        current_db = 10 * np.log10(current + 1e-12)
+        median_db = 10 * np.log10(median + 1e-12) if median is not None else None
+
         return {
-            "current": current.tolist(),
-            "median": median.tolist() if median is not None else None,
+            "current": current_db.tolist(),
+            "median": median_db.tolist() if median_db is not None else None,
             "frequencies": FREQUENCIES.tolist(),
         }
 

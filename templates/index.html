@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 900px;
+            width: 100%;
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .control-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .card h2 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.active {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status.inactive {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background: #e0a800;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 193, 7, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            background: #ccc;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .switch.on {
+            background: #28a745;
+        }
+
+        .switch::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .switch.on::after {
+            left: 24px;
+        }
+
+        .plot-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .plot-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #spectrumPlot {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .plot-message {
+            color: #999;
+            padding: 40px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .message {
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Radio Recorder</h1>
+
+        <div class="control-section">
+            <!-- Dongle Control -->
+            <div class="card">
+                <h2>Dongle</h2>
+                <p>Status: <span id="dongleStatus" class="status disconnected">Disconnected</span></p>
+                <div class="button-group">
+                    <button class="btn-primary" id="connectBtn" onclick="connect()">Connect</button>
+                    <button class="btn-danger" id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+                </div>
+                <div id="dongleMessage" class="message"></div>
+            </div>
+
+            <!-- Bias Tee Control -->
+            <div class="card">
+                <h2>Bias Tee</h2>
+                <p>Status: <span id="biasTeeStatus" class="status inactive">Off</span></p>
+                <div class="toggle-switch">
+                    <span>Off</span>
+                    <div class="switch" id="biasTeeSwitch" onclick="toggleBiasTee()"></div>
+                    <span>On</span>
+                </div>
+                <div id="biasTeeMessage" class="message"></div>
+            </div>
+
+            <!-- Recording Control -->
+            <div class="card">
+                <h2>Recording</h2>
+                <p>Status: <span id="recordingStatus" class="status inactive">Stopped</span></p>
+                <div class="button-group">
+                    <button class="btn-success" id="recordStartBtn" onclick="startRecording()" disabled>Start</button>
+                    <button class="btn-danger" id="recordStopBtn" onclick="stopRecording()" disabled>Stop</button>
+                </div>
+                <div id="recordingMessage" class="message"></div>
+            </div>
+        </div>
+
+        <!-- Plot Section -->
+        <div class="plot-section">
+            <h2>Spectrum Plot</h2>
+            <img id="spectrumPlot" src="" alt="Spectrum Plot">
+            <div id="plotMessage" class="plot-message">No spectrum data available yet. Start recording to see data.</div>
+        </div>
+    </div>
+
+    <script>
+        // Refresh status periodically
+        setInterval(updateStatus, 1000);
+
+        // Refresh plot periodically when recording
+        setInterval(updatePlot, 2000);
+
+        function showMessage(elementId, message, type) {
+            const msgEl = document.getElementById(elementId);
+            msgEl.textContent = message;
+            msgEl.className = `message show ${type}`;
+            setTimeout(() => {
+                msgEl.classList.remove('show');
+            }, 5000);
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                // Update dongle status
+                const dongleStatus = document.getElementById('dongleStatus');
+                const connectBtn = document.getElementById('connectBtn');
+                const disconnectBtn = document.getElementById('disconnectBtn');
+
+                if (data.connected) {
+                    dongleStatus.textContent = 'Connected';
+                    dongleStatus.className = 'status connected';
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                } else {
+                    dongleStatus.textContent = 'Disconnected';
+                    dongleStatus.className = 'status disconnected';
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                }
+
+                // Update bias tee status
+                const biasTeeStatus = document.getElementById('biasTeeStatus');
+                const biasTeeSwitch = document.getElementById('biasTeeSwitch');
+                const recordStartBtn = document.getElementById('recordStartBtn');
+
+                if (data.bias_tee_enabled) {
+                    biasTeeStatus.textContent = 'On';
+                    biasTeeStatus.className = 'status active';
+                    biasTeeSwitch.classList.add('on');
+                } else {
+                    biasTeeStatus.textContent = 'Off';
+                    biasTeeStatus.className = 'status inactive';
+                    biasTeeSwitch.classList.remove('on');
+                }
+
+                // Update recording status
+                const recordingStatus = document.getElementById('recordingStatus');
+                const recordStopBtn = document.getElementById('recordStopBtn');
+
+                if (data.recording) {
+                    recordingStatus.textContent = 'Recording';
+                    recordingStatus.className = 'status active';
+                    recordStartBtn.disabled = true;
+                    recordStopBtn.disabled = false;
+                } else {
+                    recordingStatus.textContent = 'Stopped';
+                    recordingStatus.className = 'status inactive';
+                    recordStartBtn.disabled = !data.connected;
+                    recordStopBtn.disabled = true;
+                }
+
+                // Disable recording buttons if not connected
+                if (!data.connected) {
+                    recordStartBtn.disabled = true;
+                    recordStopBtn.disabled = true;
+                    document.getElementById('biasTeeSwitch').parentElement.parentElement.style.opacity = '0.5';
+                    document.getElementById('biasTeeSwitch').parentElement.parentElement.style.pointerEvents = 'none';
+                } else {
+                    document.getElementById('biasTeeSwitch').parentElement.parentElement.style.opacity = '1';
+                    document.getElementById('biasTeeSwitch').parentElement.parentElement.style.pointerEvents = 'auto';
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function connect() {
+            try {
+                const response = await fetch('/api/connect', { method: 'POST' });
+                const data = await response.json();
+                showMessage('dongleMessage', data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                showMessage('dongleMessage', 'Error connecting', 'error');
+            }
+        }
+
+        async function disconnect() {
+            try {
+                const response = await fetch('/api/disconnect', { method: 'POST' });
+                const data = await response.json();
+                showMessage('dongleMessage', data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                showMessage('dongleMessage', 'Error disconnecting', 'error');
+            }
+        }
+
+        async function toggleBiasTee() {
+            const switchEl = document.getElementById('biasTeeSwitch');
+            const enabled = !switchEl.classList.contains('on');
+
+            try {
+                const response = await fetch('/api/bias-tee', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                const data = await response.json();
+                showMessage('biasTeeMessage', data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                showMessage('biasTeeMessage', 'Error toggling bias tee', 'error');
+            }
+        }
+
+        async function startRecording() {
+            try {
+                const response = await fetch('/api/recording/start', { method: 'POST' });
+                const data = await response.json();
+                showMessage('recordingMessage', data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                showMessage('recordingMessage', 'Error starting recording', 'error');
+            }
+        }
+
+        async function stopRecording() {
+            try {
+                const response = await fetch('/api/recording/stop', { method: 'POST' });
+                const data = await response.json();
+                showMessage('recordingMessage', data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                showMessage('recordingMessage', 'Error stopping recording', 'error');
+            }
+        }
+
+        async function updatePlot() {
+            try {
+                const response = await fetch('/api/spectrum/plot');
+                const data = await response.json();
+
+                const plotImg = document.getElementById('spectrumPlot');
+                const plotMsg = document.getElementById('plotMessage');
+
+                if (data.success) {
+                    plotImg.src = data.image;
+                    plotImg.style.display = 'block';
+                    plotMsg.style.display = 'none';
+                } else {
+                    plotImg.style.display = 'none';
+                    plotMsg.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error updating plot:', error);
+            }
+        }
+
+        // Initial status update
+        updateStatus();
+    </script>
+</body>
+</html>

@@ -11,7 +11,7 @@ app = Flask(__name__)
 CENTER_FREQ = 1420.2e6
 SAMPLE_RATE = 2.4e6
 CHUNK_SAMPLES = int(SAMPLE_RATE)
-FFT_LEN = 1024
+FFT_LEN = 4096
 OUTPUT_DIR = "raw"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -32,6 +32,8 @@ class RadioRecorder:
         self.spectrum_lock = threading.Lock()
         self.stop_recording = False
         self.recording_thread = None
+        self.median_spectrum = None
+        self.spectrum_buffer = []
 
     def connect(self):
         """Initialize RTL-SDR dongle"""
@@ -83,6 +85,8 @@ class RadioRecorder:
 
         self.recording = True
         self.stop_recording = False
+        self.spectrum_buffer = []
+        self.median_spectrum = None
         self.recording_thread = threading.Thread(target=self._recording_thread, daemon=True)
         self.recording_thread.start()
         return True, "Recording started"
@@ -103,9 +107,13 @@ class RadioRecorder:
                 spectrum = np.abs(np.fft.fftshift(np.fft.fft(samples, n=FFT_LEN))) ** 2
                 spectrum_db = 10 * np.log10(spectrum + 1e-12)
 
-                # Store current spectrum
+                # Store current spectrum and add to buffer for median
                 with self.spectrum_lock:
                     self.last_spectrum = spectrum_db
+                    self.spectrum_buffer.append(spectrum_db)
+                    # Compute median spectrum from buffer
+                    if len(self.spectrum_buffer) > 0:
+                        self.median_spectrum = np.median(self.spectrum_buffer, axis=0)
 
                 # Save to file with timestamp
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
@@ -120,15 +128,17 @@ class RadioRecorder:
                 break
 
     def get_spectrum_plot(self):
-        """Return current spectrum data and frequency labels"""
+        """Return current and median spectrum data with frequency labels"""
         with self.spectrum_lock:
             if self.last_spectrum is None:
                 return None
 
-            spectrum = self.last_spectrum.copy()
+            current = self.last_spectrum.copy()
+            median = self.median_spectrum.copy() if self.median_spectrum is not None else None
 
         return {
-            'spectrum': spectrum.tolist(),
+            'current': current.tolist(),
+            'median': median.tolist() if median is not None else None,
             'frequencies': FREQUENCIES.tolist()
         }
 

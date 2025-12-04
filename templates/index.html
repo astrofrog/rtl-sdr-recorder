@@ -298,27 +298,91 @@
 
         <!-- Plot Section -->
         <div class="plot-section">
-            <h2>Spectrum Plot</h2>
-            <div class="chart-container">
-                <canvas id="spectrumChart"></canvas>
-                <div id="plotMessage" class="plot-message">No spectrum data available yet. Start recording to see data.</div>
+            <h2>Spectrum Analysis</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h3 style="text-align: center; color: #333; margin-bottom: 10px; font-size: 14px;">Current Spectrum</h3>
+                    <div class="chart-container">
+                        <canvas id="currentChart"></canvas>
+                        <div id="currentPlotMessage" class="plot-message">No spectrum data available yet. Start recording to see data.</div>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="text-align: center; color: #333; margin-bottom: 10px; font-size: 14px;">Median Spectrum</h3>
+                    <div class="chart-container">
+                        <canvas id="medianChart"></canvas>
+                        <div id="medianPlotMessage" class="plot-message">No spectrum data available yet. Start recording to see data.</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         // Initialize Chart.js
-        let spectrumChart = null;
+        let currentChart = null;
+        let medianChart = null;
 
-        function initializeChart() {
-            const ctx = document.getElementById('spectrumChart').getContext('2d');
-            spectrumChart = new Chart(ctx, {
+        function initializeCharts() {
+            // Current spectrum chart
+            const ctxCurrent = document.getElementById('currentChart').getContext('2d');
+            currentChart = new Chart(ctxCurrent, {
                 type: 'scatter',
                 data: {
                     datasets: [{
                         label: 'Power (dB)',
                         data: [],
                         borderColor: '#667eea',
+                        backgroundColor: 'rgba(0, 0, 0, 0)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        showLine: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Frequency (MHz)'
+                            },
+                            ticks: {
+                                stepSize: 0.1,
+                                maxTicksLimit: 25
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Power (dB)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Median spectrum chart
+            const ctxMedian = document.getElementById('medianChart').getContext('2d');
+            medianChart = new Chart(ctxMedian, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Power (dB)',
+                        data: [],
+                        borderColor: '#28a745',
                         backgroundColor: 'rgba(0, 0, 0, 0)',
                         borderWidth: 2,
                         fill: false,
@@ -511,26 +575,40 @@
                 const response = await fetch('/api/spectrum/plot');
                 const data = await response.json();
 
-                const plotMsg = document.getElementById('plotMessage');
+                const currentPlotMsg = document.getElementById('currentPlotMessage');
+                const medianPlotMsg = document.getElementById('medianPlotMessage');
 
                 if (data.success && data.data) {
-                    if (!spectrumChart) {
-                        initializeChart();
+                    if (!currentChart || !medianChart) {
+                        initializeCharts();
                     }
 
                     // Create scatter data points with frequency as x and power as y
-                    const scatterData = data.data.frequencies.map((freq, i) => ({
+                    const currentData = data.data.frequencies.map((freq, i) => ({
                         x: freq,
-                        y: data.data.spectrum[i]
+                        y: data.data.current[i]
                     }));
 
-                    // Update chart
-                    spectrumChart.data.datasets[0].data = scatterData;
-                    spectrumChart.update('none'); // Update without animation for smooth real-time display
+                    // Update current chart
+                    currentChart.data.datasets[0].data = currentData;
+                    currentChart.update('none');
+                    currentPlotMsg.style.display = 'none';
 
-                    plotMsg.style.display = 'none';
+                    // Update median chart if available
+                    if (data.data.median) {
+                        const medianData = data.data.frequencies.map((freq, i) => ({
+                            x: freq,
+                            y: data.data.median[i]
+                        }));
+                        medianChart.data.datasets[0].data = medianData;
+                        medianChart.update('none');
+                        medianPlotMsg.style.display = 'none';
+                    } else {
+                        medianPlotMsg.style.display = 'block';
+                    }
                 } else {
-                    plotMsg.style.display = 'block';
+                    currentPlotMsg.style.display = 'block';
+                    medianPlotMsg.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Error updating plot:', error);

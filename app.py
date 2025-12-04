@@ -17,7 +17,7 @@ OUTPUT_DIR = "raw"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Pre-compute frequency array (in MHz)
-FREQUENCIES = (np.fft.fftshift(np.fft.fftfreq(FFT_LEN, 1/SAMPLE_RATE)) + CENTER_FREQ) / 1e6
+FREQUENCIES = (np.fft.fftshift(np.fft.fftfreq(FFT_LEN, 1 / SAMPLE_RATE)) + CENTER_FREQ) / 1e6
 
 
 class RadioRecorder:
@@ -137,9 +137,9 @@ class RadioRecorder:
             median = self.median_spectrum.copy() if self.median_spectrum is not None else None
 
         return {
-            'current': current.tolist(),
-            'median': median.tolist() if median is not None else None,
-            'frequencies': FREQUENCIES.tolist()
+            "current": current.tolist(),
+            "median": median.tolist() if median is not None else None,
+            "frequencies": FREQUENCIES.tolist(),
         }
 
 
@@ -147,90 +147,89 @@ class RadioRecorder:
 recorder = RadioRecorder()
 
 
-@app.route('/')
+@app.route("/")
 def index():
     """Serve the main page"""
-    return render_template('index.html')
+    return render_template("index.html")
 
 
-@app.route('/api/status')
+@app.route("/api/status")
 def get_status():
     """Get current status"""
-    return jsonify({
-        'connected': recorder.connected,
-        'bias_tee_enabled': recorder.bias_tee_enabled,
-        'recording': recorder.recording,
-    })
+    return jsonify(
+        {
+            "connected": recorder.connected,
+            "bias_tee_enabled": recorder.bias_tee_enabled,
+            "recording": recorder.recording,
+        }
+    )
 
 
-@app.route('/api/connect', methods=['POST'])
+@app.route("/api/connect", methods=["POST"])
 def connect():
     """Connect to RTL-SDR dongle"""
     if recorder.connected:
-        return jsonify({'success': False, 'message': 'Already connected'}), 400
+        return jsonify({"success": False, "message": "Already connected"}), 400
 
     success, message = recorder.connect()
-    return jsonify({'success': success, 'message': message})
+    return jsonify({"success": success, "message": message})
 
 
-@app.route('/api/disconnect', methods=['POST'])
+@app.route("/api/disconnect", methods=["POST"])
 def disconnect():
     """Disconnect from RTL-SDR dongle"""
     if not recorder.connected:
-        return jsonify({'success': False, 'message': 'Not connected'}), 400
+        return jsonify({"success": False, "message": "Not connected"}), 400
 
     success, message = recorder.disconnect()
-    return jsonify({'success': success, 'message': message})
+    return jsonify({"success": success, "message": message})
 
 
-@app.route('/api/bias-tee', methods=['POST'])
+@app.route("/api/bias-tee", methods=["POST"])
 def toggle_bias_tee():
     """Toggle bias tee"""
     if not recorder.connected:
-        return jsonify({'success': False, 'message': 'Dongle not connected'}), 400
+        return jsonify({"success": False, "message": "Dongle not connected"}), 400
 
     data = request.get_json()
-    enabled = data.get('enabled', False)
+    enabled = data.get("enabled", False)
 
     success, message = recorder.set_bias_tee(enabled)
-    return jsonify({'success': success, 'message': message})
+    return jsonify({"success": success, "message": message})
 
 
-@app.route('/api/recording/start', methods=['POST'])
+@app.route("/api/recording/start", methods=["POST"])
 def start_recording():
     """Start recording"""
     success, message = recorder.start_recording()
     if not success:
-        return jsonify({'success': False, 'message': message}), 400
-    return jsonify({'success': True, 'message': message})
+        return jsonify({"success": False, "message": message}), 400
+    return jsonify({"success": True, "message": message})
 
 
-@app.route('/api/recording/stop', methods=['POST'])
+@app.route("/api/recording/stop", methods=["POST"])
 def stop_recording():
     """Stop recording"""
     if not recorder.recording:
-        return jsonify({'success': False, 'message': 'Not recording'}), 400
+        return jsonify({"success": False, "message": "Not recording"}), 400
 
     recorder.stop_recording_internal()
-    return jsonify({'success': True, 'message': 'Recording stopped'})
+    return jsonify({"success": True, "message": "Recording stopped"})
 
 
-@app.route('/api/spectrum/plot')
+@app.route("/api/spectrum/plot")
 def get_spectrum_plot():
     """Get current spectrum data as JSON"""
     spectrum_data = recorder.get_spectrum_plot()
 
     if spectrum_data is None:
-        return jsonify({'success': False, 'message': 'No spectrum data available'}), 400
+        return jsonify({"success": False, "message": "No spectrum data available"}), 400
 
-    return jsonify({
-        'success': True,
-        'data': spectrum_data
-    })
+    return jsonify({"success": True, "data": spectrum_data})
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
-        app.run(debug=True, host='127.0.0.1', port=5000)
+        app.run(debug=True, host="127.0.0.1", port=5000)
     finally:
         recorder.disconnect()

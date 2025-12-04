@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Radio Recorder</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <style>
         * {
             margin: 0;
@@ -25,7 +26,7 @@
             background: white;
             border-radius: 10px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            max-width: 900px;
+            max-width: 1200px;
             width: 100%;
             padding: 30px;
         }
@@ -197,7 +198,6 @@
 
         .plot-section {
             margin-top: 30px;
-            text-align: center;
         }
 
         .plot-section h2 {
@@ -207,17 +207,19 @@
             letter-spacing: 1px;
         }
 
-        #spectrumPlot {
-            max-width: 100%;
-            height: auto;
+        .chart-container {
+            position: relative;
+            height: 400px;
             border-radius: 8px;
+            background: #f8f9fa;
+            padding: 20px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            display: none;
         }
 
         .plot-message {
             color: #999;
-            padding: 40px;
+            padding: 60px 40px;
+            text-align: center;
             background: #f8f9fa;
             border-radius: 8px;
             border-left: 4px solid #667eea;
@@ -297,12 +299,68 @@
         <!-- Plot Section -->
         <div class="plot-section">
             <h2>Spectrum Plot</h2>
-            <img id="spectrumPlot" src="" alt="Spectrum Plot">
-            <div id="plotMessage" class="plot-message">No spectrum data available yet. Start recording to see data.</div>
+            <div class="chart-container">
+                <canvas id="spectrumChart"></canvas>
+                <div id="plotMessage" class="plot-message">No spectrum data available yet. Start recording to see data.</div>
+            </div>
         </div>
     </div>
 
     <script>
+        // Initialize Chart.js
+        let spectrumChart = null;
+
+        function initializeChart() {
+            const ctx = document.getElementById('spectrumChart').getContext('2d');
+            spectrumChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Power (dB)',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(0, 0, 0, 0)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        showLine: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Frequency (MHz)'
+                            },
+                            ticks: {
+                                stepSize: 0.1,
+                                maxTicksLimit: 25
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Power (dB)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         // Refresh status periodically
         setInterval(updateStatus, 1000);
 
@@ -453,15 +511,25 @@
                 const response = await fetch('/api/spectrum/plot');
                 const data = await response.json();
 
-                const plotImg = document.getElementById('spectrumPlot');
                 const plotMsg = document.getElementById('plotMessage');
 
-                if (data.success) {
-                    plotImg.src = data.image;
-                    plotImg.style.display = 'block';
+                if (data.success && data.data) {
+                    if (!spectrumChart) {
+                        initializeChart();
+                    }
+
+                    // Create scatter data points with frequency as x and power as y
+                    const scatterData = data.data.frequencies.map((freq, i) => ({
+                        x: freq,
+                        y: data.data.spectrum[i]
+                    }));
+
+                    // Update chart
+                    spectrumChart.data.datasets[0].data = scatterData;
+                    spectrumChart.update('none'); // Update without animation for smooth real-time display
+
                     plotMsg.style.display = 'none';
                 } else {
-                    plotImg.style.display = 'none';
                     plotMsg.style.display = 'block';
                 }
             } catch (error) {

@@ -4,11 +4,6 @@ import threading
 import os
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
-import base64
-from io import BytesIO
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 app = Flask(__name__)
 
@@ -20,6 +15,9 @@ FFT_LEN = 1024
 OUTPUT_DIR = "raw"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Pre-compute frequency array (in MHz)
+FREQUENCIES = (np.fft.fftshift(np.fft.fftfreq(FFT_LEN, 1/SAMPLE_RATE)) + CENTER_FREQ) / 1e6
 
 
 class RadioRecorder:
@@ -122,29 +120,17 @@ class RadioRecorder:
                 break
 
     def get_spectrum_plot(self):
-        """Generate and return current spectrum as base64 PNG"""
+        """Return current spectrum data and frequency labels"""
         with self.spectrum_lock:
             if self.last_spectrum is None:
                 return None
 
             spectrum = self.last_spectrum.copy()
 
-        # Create plot
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(spectrum)
-        ax.set_xlabel('Frequency Bin')
-        ax.set_ylabel('Power (dB)')
-        ax.set_title('Current Spectrum')
-        ax.grid(True, alpha=0.3)
-
-        # Convert to base64
-        buffer = BytesIO()
-        plt.savefig(buffer, format='png', bbox_inches='tight', dpi=80)
-        buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.read()).decode()
-        plt.close(fig)
-
-        return image_base64
+        return {
+            'spectrum': spectrum.tolist(),
+            'frequencies': FREQUENCIES.tolist()
+        }
 
 
 # Global recorder instance
@@ -221,15 +207,15 @@ def stop_recording():
 
 @app.route('/api/spectrum/plot')
 def get_spectrum_plot():
-    """Get current spectrum as a plot image"""
-    image_base64 = recorder.get_spectrum_plot()
+    """Get current spectrum data as JSON"""
+    spectrum_data = recorder.get_spectrum_plot()
 
-    if image_base64 is None:
+    if spectrum_data is None:
         return jsonify({'success': False, 'message': 'No spectrum data available'}), 400
 
     return jsonify({
         'success': True,
-        'image': f'data:image/png;base64,{image_base64}'
+        'data': spectrum_data
     })
 
 

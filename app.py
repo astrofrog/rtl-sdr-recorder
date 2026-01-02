@@ -8,7 +8,7 @@ from flask import Flask, render_template, jsonify, request
 app = Flask(__name__)
 
 # Configuration
-CENTER_FREQ = 1420.2e6
+CENTER_FREQ = 1420e6
 SAMPLE_RATE = 2.4e6
 CHUNK_SAMPLES = int(SAMPLE_RATE)
 FFT_LEN = 4096

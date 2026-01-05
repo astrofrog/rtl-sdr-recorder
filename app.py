@@ -1,16 +1,19 @@
 import numpy as np
-
-SIMULATED = True
-
-if SIMULATED:
-    from rtlsdr_simulated import RtlSdr
-else:
-    from rtlsdr import RtlSdr
-
+import argparse
 import threading
 import os
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--simulated', action='store_true', help='Use simulated RTL-SDR dongle')
+args = parser.parse_args()
+
+if args.simulated:
+    from rtlsdr_simulated import RtlSdr
+else:
+    from rtlsdr import RtlSdr
 
 app = Flask(__name__)
 

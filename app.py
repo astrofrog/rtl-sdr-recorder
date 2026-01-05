@@ -1,5 +1,12 @@
 import numpy as np
-from rtlsdr import RtlSdr
+
+SIMULATED = True
+
+if SIMULATED:
+    from rtlsdr_simulated import RtlSdr
+else:
+    from rtlsdr import RtlSdr
+
 import threading
 import os
 from datetime import datetime

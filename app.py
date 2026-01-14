@@ -39,12 +39,15 @@ class RadioRecorder:
         self.connected = False
         self.bias_tee_enabled = False
         self.recording = False
-        self.last_spectrum = None
         self.spectrum_lock = threading.Lock()
         self.stop_recording = False
         self.recording_thread = None
-        self.median_spectrum = None
-        self.spectrum_buffer = []
+        # Spectrum data
+        self.last_on = None
+        self.last_off = None
+        self.last_diff = None
+        self.accumulated_diff = None
+        self.diff_buffer = []
 
     def connect(self):
         """Initialize RTL-SDR dongle"""
@@ -96,8 +99,8 @@ class RadioRecorder:
 
         self.recording = True
         self.stop_recording = False
-        self.spectrum_buffer = []
-        self.median_spectrum = None
+        self.diff_buffer = []
+        self.accumulated_diff = None
         self.recording_thread = threading.Thread(target=self._recording_thread, daemon=True)
         self.recording_thread.start()
         return True, "Recording started"
@@ -141,17 +144,19 @@ class RadioRecorder:
                 spectrum_off = self._compute_averaged_spectrum(samples)
                 self._save_spectrum(spectrum_off, timestamp, "off")
 
-                # Compute and save difference (preserve sign)
+                # Compute and save difference
                 spectrum_diff = spectrum_on - spectrum_off
-                filename = self._save_spectrum(spectrum_diff, timestamp, "diff")
+                self._save_spectrum(spectrum_diff, timestamp, "diff")
 
-                # Store current spectrum (linear) and add to buffer for median
+                # Store spectra and update accumulated difference
                 with self.spectrum_lock:
-                    self.last_spectrum = spectrum_diff
-                    self.spectrum_buffer.append(spectrum_diff)
-                    self.median_spectrum = np.median(self.spectrum_buffer, axis=0)
+                    self.last_on = spectrum_on
+                    self.last_off = spectrum_off
+                    self.last_diff = spectrum_diff
+                    self.diff_buffer.append(spectrum_diff)
+                    self.accumulated_diff = np.median(self.diff_buffer, axis=0)
 
-                print(f"Saved spectrum: {filename}")
+                print(f"Saved spectrum: {timestamp}")
 
             except Exception as e:
                 print(f"Error in recording thread: {str(e)}")
@@ -159,21 +164,25 @@ class RadioRecorder:
                 break
 
     def get_spectrum_plot(self):
-        """Return current and median spectrum data with frequency labels (converted to dB for display)"""
+        """Return spectrum data for all four plots"""
         with self.spectrum_lock:
-            if self.last_spectrum is None:
+            if self.last_on is None:
                 return None
 
-            current = self.last_spectrum.copy()
-            median = self.median_spectrum.copy() if self.median_spectrum is not None else None
+            on = self.last_on.copy()
+            off = self.last_off.copy()
+            diff = self.last_diff.copy()
+            accumulated = self.accumulated_diff.copy() if self.accumulated_diff is not None else None
 
-        # Convert to dB for display
-        current_db = 10 * np.log10(current + 1e-12)
-        median_db = 10 * np.log10(median + 1e-12) if median is not None else None
+        # Convert on/off to dB for display
+        on_db = 10 * np.log10(on + 1e-12)
+        off_db = 10 * np.log10(off + 1e-12)
 
         return {
-            "current": current_db.tolist(),
-            "median": median_db.tolist() if median_db is not None else None,
+            "on": on_db.tolist(),
+            "off": off_db.tolist(),
+            "diff": diff.tolist(),
+            "accumulated": accumulated.tolist() if accumulated is not None else None,
             "frequencies": FREQUENCIES.tolist(),
         }
 

@@ -205,6 +205,7 @@ def get_status():
             "connected": recorder.connected,
             "bias_tee_enabled": recorder.bias_tee_enabled,
             "recording": recorder.recording,
+            "simulated": args.simulated,
         }
     )
 

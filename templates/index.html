@@ -93,6 +93,17 @@
             color: #383d41;
         }
 
+        .simulated-badge {
+            background: #ffc107;
+            color: #333;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+            display: none;
+        }
+
         .button-group {
             display: flex;
             gap: 10px;
@@ -263,7 +274,7 @@
         <div class="control-section">
             <!-- Dongle Control -->
             <div class="card">
-                <h2>Dongle</h2>
+                <h2>Dongle<span id="simulatedBadge" class="simulated-badge">SIMULATED</span></h2>
                 <p>Status: <span id="dongleStatus" class="status disconnected">Disconnected</span></p>
                 <div class="button-group">
                     <button class="btn-primary" id="connectBtn" onclick="connect()">Connect</button>
@@ -393,6 +404,9 @@
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
+
+                // Show simulated badge if using simulated dongle
+                document.getElementById('simulatedBadge').style.display = data.simulated ? 'inline' : 'none';
 
                 // Update dongle status
                 const dongleStatus = document.getElementById('dongleStatus');

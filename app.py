@@ -19,6 +19,7 @@ app = Flask(__name__)
 
 # Configuration
 CENTER_FREQ = 1420e6
+OFFSET_FREQ = 1416e6  # 4 MHz below, no overlap with on-frequency band
 SAMPLE_RATE = 2.4e6
 CHUNK_SAMPLES = int(SAMPLE_RATE)
 FFT_LEN = 4096
@@ -108,26 +109,53 @@ class RadioRecorder:
         if self.recording_thread is not None:
             self.recording_thread.join(timeout=2)
 
+    def _compute_averaged_spectrum(self, samples):
+        """Compute power spectrum averaged over all complete FFT windows."""
+        n_ffts = len(samples) // FFT_LEN
+        trimmed = samples[:n_ffts * FFT_LEN]
+        chunks = trimmed.reshape(n_ffts, FFT_LEN)
+        spectra = np.abs(np.fft.fftshift(np.fft.fft(chunks, axis=1), axes=1)) ** 2
+        return np.mean(spectra, axis=0)
+
     def _recording_thread(self):
         """Background thread for recording spectra"""
         while self.recording and not self.stop_recording:
             try:
-                # Read samples and compute FFT
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+
+                self.sdr.center_freq = CENTER_FREQ
+
+                # Read samples and compute averaged FFT
                 samples = self.sdr.read_samples(CHUNK_SAMPLES)
-                spectrum = np.abs(np.fft.fftshift(np.fft.fft(samples, n=FFT_LEN))) ** 2
+                spectrum = self._compute_averaged_spectrum(samples)
+
+                # Save to file with timestamp (raw linear spectrum)
+                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_on.npy")
+                np.save(filename, spectrum)
+
+                self.sdr.center_freq = OFFSET_FREQ
+
+                samples = self.sdr.read_samples(CHUNK_SAMPLES)
+                spectrum_offset = self._compute_averaged_spectrum(samples)
+
+                # Save to file with timestamp (raw linear spectrum)
+                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_off.npy")
+                np.save(filename, spectrum_offset)
+
+                # Preserve sign - don't use abs()
+                spectrum_diff = spectrum - spectrum_offset
+
+                # Save to file with timestamp (raw linear spectrum)
+                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_diff.npy")
+                np.save(filename, spectrum_diff)
 
                 # Store current spectrum (linear) and add to buffer for median
                 with self.spectrum_lock:
-                    self.last_spectrum = spectrum
-                    self.spectrum_buffer.append(spectrum)
+                    self.last_spectrum = spectrum_diff
+                    self.spectrum_buffer.append(spectrum_diff)
                     # Compute median spectrum from buffer (in linear space)
                     if len(self.spectrum_buffer) > 0:
                         self.median_spectrum = np.median(self.spectrum_buffer, axis=0)
-
-                # Save to file with timestamp (raw linear spectrum)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}.npy")
-                np.save(filename, spectrum)
 
                 print(f"Saved spectrum: {filename}")
 
@@ -243,6 +271,6 @@ def get_spectrum_plot():
 
 if __name__ == "__main__":
     try:
-        app.run(debug=True, host="127.0.0.1", port=5000)
+        app.run(debug=False, host="127.0.0.1", port=5000)
     finally:
         recorder.disconnect()

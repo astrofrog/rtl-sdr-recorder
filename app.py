@@ -117,45 +117,39 @@ class RadioRecorder:
         spectra = np.abs(np.fft.fftshift(np.fft.fft(chunks, axis=1), axes=1)) ** 2
         return np.mean(spectra, axis=0)
 
+    def _save_spectrum(self, spectrum, timestamp, suffix):
+        """Save spectrum to file."""
+        filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_{suffix}.npy")
+        np.save(filename, spectrum)
+        return filename
+
     def _recording_thread(self):
         """Background thread for recording spectra"""
         while self.recording and not self.stop_recording:
             try:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
 
+                # Capture on-frequency spectrum
                 self.sdr.center_freq = CENTER_FREQ
-
-                # Read samples and compute averaged FFT
                 samples = self.sdr.read_samples(CHUNK_SAMPLES)
-                spectrum = self._compute_averaged_spectrum(samples)
+                spectrum_on = self._compute_averaged_spectrum(samples)
+                self._save_spectrum(spectrum_on, timestamp, "on")
 
-                # Save to file with timestamp (raw linear spectrum)
-                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_on.npy")
-                np.save(filename, spectrum)
-
+                # Capture off-frequency spectrum
                 self.sdr.center_freq = OFFSET_FREQ
-
                 samples = self.sdr.read_samples(CHUNK_SAMPLES)
-                spectrum_offset = self._compute_averaged_spectrum(samples)
+                spectrum_off = self._compute_averaged_spectrum(samples)
+                self._save_spectrum(spectrum_off, timestamp, "off")
 
-                # Save to file with timestamp (raw linear spectrum)
-                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_off.npy")
-                np.save(filename, spectrum_offset)
-
-                # Preserve sign - don't use abs()
-                spectrum_diff = spectrum - spectrum_offset
-
-                # Save to file with timestamp (raw linear spectrum)
-                filename = os.path.join(OUTPUT_DIR, f"spectrum_{timestamp}_diff.npy")
-                np.save(filename, spectrum_diff)
+                # Compute and save difference (preserve sign)
+                spectrum_diff = spectrum_on - spectrum_off
+                filename = self._save_spectrum(spectrum_diff, timestamp, "diff")
 
                 # Store current spectrum (linear) and add to buffer for median
                 with self.spectrum_lock:
                     self.last_spectrum = spectrum_diff
                     self.spectrum_buffer.append(spectrum_diff)
-                    # Compute median spectrum from buffer (in linear space)
-                    if len(self.spectrum_buffer) > 0:
-                        self.median_spectrum = np.median(self.spectrum_buffer, axis=0)
+                    self.median_spectrum = np.median(self.spectrum_buffer, axis=0)
 
                 print(f"Saved spectrum: {filename}")
 

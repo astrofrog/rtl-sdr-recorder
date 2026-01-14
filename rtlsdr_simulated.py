@@ -15,14 +15,27 @@ class RtlSdr:
 
     def read_samples(self, num_samples):
         """
-        Return simulated IQ samples with noise and a Gaussian HI line.
+        Return simulated IQ samples with noise, bandpass shape, and a Gaussian HI line.
         The HI line is at 1420.405 MHz with 0.1 MHz FWHM.
         """
         # Frequency array (absolute frequencies)
         freqs = np.fft.fftfreq(num_samples, 1 / self.sample_rate) + self.center_freq
 
-        # Flat noise spectrum with random phase
-        spectrum = np.random.randn(num_samples) + 1j * np.random.randn(num_samples)
+        # Bandpass shape: flat top with sharp roll-off at edges
+        # Model as product of two tanh functions for left and right edges
+        edge_steepness = 10e-6  # Controls roll-off sharpness (smaller = sharper)
+        left_edge = self.center_freq - 0.9e6
+        right_edge = self.center_freq + 0.9e6
+        bandpass = 0.5 * (1 + np.tanh((freqs - left_edge) / (edge_steepness * self.center_freq)))
+        bandpass *= 0.5 * (1 + np.tanh((right_edge - freqs) / (edge_steepness * self.center_freq)))
+
+        # Add some ripple in the passband
+        ripple = 1 + 0.05 * np.sin(2 * np.pi * (freqs - self.center_freq) / 0.3e6)
+        bandpass *= ripple
+
+        # Base noise spectrum shaped by bandpass
+        noise = np.random.randn(num_samples) + 1j * np.random.randn(num_samples)
+        spectrum = noise * (0.1 + bandpass * 10)  # Floor + bandpass-shaped noise
 
         # HI line parameters
         hi_center = 1420.405e6  # Hydrogen line frequency
@@ -30,7 +43,7 @@ class RtlSdr:
         hi_sigma = hi_fwhm / (2 * np.sqrt(2 * np.log(2)))  # Convert FWHM to sigma
 
         # Add Gaussian HI line with random phase
-        hi_amplitude = 5.0
+        hi_amplitude = 3.0
         gaussian = np.exp(-(freqs - hi_center) ** 2 / (2 * hi_sigma ** 2))
         spectrum += hi_amplitude * gaussian * np.exp(2j * np.pi * np.random.rand(num_samples))
 

@@ -126,8 +126,36 @@ class RadioRecorder:
         np.save(filename, spectrum)
         return filename
 
+    def _reconnect(self):
+        """Attempt to reconnect to the dongle"""
+        print("Attempting to reconnect...")
+        try:
+            if self.sdr is not None:
+                try:
+                    self.sdr.close()
+                except:
+                    pass
+                self.sdr = None
+
+            import time
+            time.sleep(1)
+
+            self.sdr = RtlSdr()
+            self.sdr.sample_rate = SAMPLE_RATE
+            self.sdr.center_freq = CENTER_FREQ
+            self.sdr.gain = 49.6
+            self.sdr.read_samples(CHUNK_SAMPLES)  # Burn in
+            print("Reconnected successfully")
+            return True
+        except Exception as e:
+            print(f"Reconnection failed: {str(e)}")
+            return False
+
     def _recording_thread(self):
         """Background thread for recording spectra"""
+        retry_count = 0
+        max_retries = 3
+
         while self.recording and not self.stop_recording:
             try:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
@@ -157,11 +185,24 @@ class RadioRecorder:
                     self.accumulated_diff = np.median(self.diff_buffer, axis=0)
 
                 print(f"Saved spectrum: {timestamp}")
+                retry_count = 0  # Reset on success
 
             except Exception as e:
                 print(f"Error in recording thread: {str(e)}")
-                self.recording = False
-                break
+                retry_count += 1
+
+                if retry_count > max_retries:
+                    print("Max retries exceeded, stopping recording")
+                    self.recording = False
+                    self.connected = False
+                    break
+
+                if self._reconnect():
+                    continue
+                else:
+                    self.recording = False
+                    self.connected = False
+                    break
 
     def get_spectrum_plot(self):
         """Return spectrum data for all four plots"""

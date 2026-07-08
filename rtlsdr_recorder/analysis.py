@@ -5,6 +5,8 @@ averaging, plotting, and export to FITS.
 
 import glob
 import os
+import warnings
+from typing import NamedTuple
 
 import numpy as np
 from astropy import units as u
@@ -20,10 +22,13 @@ from rtlsdr_recorder.recorder import (
 )
 
 __all__ = [
+    "ReducedSpectra",
     "load_spectrum_pairs",
     "clean_spectrum",
     "downsample_spectrum",
     "average_spectra",
+    "reduce_spectrum_pairs",
+    "reduce_spectra",
     "plot_spectrum_pair",
     "to_spectrum",
     "write_fits",
@@ -69,9 +74,69 @@ def downsample_spectrum(spectrum, factor):
 def average_spectra(spectra):
     """
     Average a list of (possibly masked) spectra channel by channel, ignoring
-    masked values.
+    masked values. Channels masked in every spectrum average to NaN.
     """
-    return np.nanmean(np.ma.array(spectra).filled(np.nan), axis=0)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Mean of empty slice",
+                                category=RuntimeWarning)
+        return np.nanmean(np.ma.array(spectra).filled(np.nan), axis=0)
+
+
+class ReducedSpectra(NamedTuple):
+    """Fully reduced averages of a set of on/off observations."""
+
+    frequencies: np.ndarray
+    spectrum_on: np.ndarray
+    spectrum_off: np.ndarray
+    spectrum_diff: np.ndarray
+
+
+def reduce_spectrum_pairs(spectra_on, spectra_off, downsample=10, sigma=3,
+                          center_width=39, clip_difference=False,
+                          center_freq=DEFAULT_CENTER_FREQ,
+                          sample_rate=DEFAULT_SAMPLE_RATE):
+    """
+    Run the full reduction on lists of matched on/off spectra: mask RFI and
+    the central DC spike, spectrally downsample, and average. Returns a
+    `ReducedSpectra` with the frequencies (in MHz), the averaged on and off
+    spectra, and the difference spectrum.
+
+    By default the sigma clipping is done on the individual on and off
+    spectra and the difference is that of the averages; with
+    ``clip_difference=True`` the difference spectrum is instead reduced from
+    the per-pair on minus off differences, clipping those directly (the
+    returned on and off averages are always clipped individually).
+    """
+    if not spectra_on:
+        raise ValueError("No spectra to reduce")
+
+    def reduce(spectra):
+        return average_spectra([
+            downsample_spectrum(clean_spectrum(spec, sigma=sigma,
+                                               center_width=center_width), downsample)
+            for spec in spectra])
+
+    frequencies = downsample_spectrum(
+        frequency_array(center_freq, sample_rate, len(spectra_on[0])), downsample)
+    average_on = reduce(spectra_on)
+    average_off = reduce(spectra_off)
+    if clip_difference:
+        average_diff = reduce([on - off for on, off in zip(spectra_on, spectra_off)])
+    else:
+        average_diff = average_on - average_off
+    return ReducedSpectra(frequencies, average_on, average_off, average_diff)
+
+
+def reduce_spectra(directory, **kwargs):
+    """
+    Load all matched on/off pairs from a directory of recorded spectra and
+    reduce them with `reduce_spectrum_pairs`, which this accepts the keyword
+    arguments of.
+    """
+    spectra_on, spectra_off = load_spectrum_pairs(directory)
+    if not spectra_on:
+        raise ValueError(f"No matched on/off spectra found in {directory}")
+    return reduce_spectrum_pairs(spectra_on, spectra_off, **kwargs)
 
 
 def plot_spectrum_pair(spectrum_on, spectrum_off, frequencies=None,

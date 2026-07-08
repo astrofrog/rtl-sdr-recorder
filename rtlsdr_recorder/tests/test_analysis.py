@@ -9,6 +9,7 @@ from rtlsdr_recorder.analysis import (
     downsample_spectrum,
     load_spectrum_pairs,
     plot_spectrum_pair,
+    reduce_spectra,
     to_spectrum,
     write_fits,
 )
@@ -58,6 +59,43 @@ def test_average_spectra():
     spec2 = np.ma.array([3.0, 4.0, 5.0], mask=[False, False, False])
     average = average_spectra([spec1, spec2])
     np.testing.assert_allclose(average, [2.0, 4.0, 4.0])
+
+
+def test_average_spectra_fully_masked_channel(recwarn):
+    spec1 = np.ma.array([1.0, 2.0], mask=[False, True])
+    spec2 = np.ma.array([3.0, 4.0], mask=[False, True])
+    average = average_spectra([spec1, spec2])
+    assert average[0] == pytest.approx(2.0)
+    assert np.isnan(average[1])
+    assert not any(issubclass(warning.category, RuntimeWarning)
+                   for warning in recwarn.list)
+
+
+def test_reduce_spectra(raw_dir):
+    reduced = reduce_spectra(str(raw_dir))
+    assert (len(reduced.frequencies) == len(reduced.spectrum_on)
+            == len(reduced.spectrum_off) == len(reduced.spectrum_diff) == 409)
+    np.testing.assert_allclose(reduced.spectrum_diff,
+                               reduced.spectrum_on - reduced.spectrum_off)
+    assert np.isnan(reduced.spectrum_diff[204])  # masked DC channels
+    assert np.isfinite(reduced.spectrum_diff[100])
+    # The simulated HI line should be visible in the difference spectrum
+    line = np.abs(reduced.frequencies - 1420.405) < 0.05
+    with np.errstate(invalid="ignore"):
+        assert (np.nanmean(reduced.spectrum_diff[line])
+                > np.nanmean(reduced.spectrum_diff[~line]))
+
+
+def test_reduce_spectra_clip_difference(raw_dir):
+    reduced = reduce_spectra(str(raw_dir), clip_difference=True)
+    assert len(reduced.frequencies) == len(reduced.spectrum_diff) == 409
+    assert np.isnan(reduced.spectrum_diff[204])
+    assert np.isfinite(reduced.spectrum_diff[100])
+
+
+def test_reduce_spectra_empty(tmp_path):
+    with pytest.raises(ValueError, match="No matched on/off spectra"):
+        reduce_spectra(str(tmp_path))
 
 
 def test_plot_spectrum_pair(raw_dir):

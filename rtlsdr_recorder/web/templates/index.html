@@ -549,11 +549,12 @@
 
                     charts.on.data.datasets[0].data = toPoints(data.data.on);
                     charts.off.data.datasets[0].data = toPoints(data.data.off);
-                    charts.diff.data.datasets[0].data = toPoints(data.data.diff);
+                    charts.diff.data.datasets[0].data = toPoints(
+                        data.data.diff, data.data.reduced_frequencies);
 
                     if (data.data.accumulated) {
                         charts.accumulated.data.datasets[0].data = toPoints(
-                            data.data.accumulated, data.data.accumulated_frequencies);
+                            data.data.accumulated, data.data.reduced_frequencies);
                     }
 
                     Object.values(charts).forEach(c => c.update('none'));

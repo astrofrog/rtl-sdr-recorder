@@ -8,11 +8,7 @@ import threading
 import numpy as np
 from flask import Flask, jsonify, render_template, request
 
-from rtlsdr_recorder.analysis import (
-    average_spectra,
-    clean_spectrum,
-    downsample_spectrum,
-)
+from rtlsdr_recorder.analysis import reduce_spectrum_pairs
 from rtlsdr_recorder.recorder import (
     DEFAULT_CENTER_FREQ,
     DEFAULT_OFFSET_FREQ,
@@ -44,7 +40,6 @@ class WebRecorder:
         self.output_dir = output_dir
         self.downsample = downsample
         self.frequencies = frequency_array(center_freq, sample_rate, fft_len)
-        self.accumulated_frequencies = downsample_spectrum(self.frequencies, downsample)
 
         self.sdr = None
         self.connected = False
@@ -54,9 +49,8 @@ class WebRecorder:
         self.recording_thread = None
         self.spectrum_lock = threading.Lock()
         self.last_pair = None
-        self.clean_on_buffer = []
-        self.clean_off_buffer = []
-        self.accumulated_diff = None
+        self.on_buffer = []
+        self.off_buffer = []
 
     def connect(self):
         try:
@@ -97,9 +91,8 @@ class WebRecorder:
             return False, "Dongle not connected"
         self.recording = True
         self.stop_requested = False
-        self.clean_on_buffer = []
-        self.clean_off_buffer = []
-        self.accumulated_diff = None
+        self.on_buffer = []
+        self.off_buffer = []
         self.recording_thread = threading.Thread(target=self._recording_loop, daemon=True)
         self.recording_thread.start()
         return True, "Recording started"
@@ -118,16 +111,10 @@ class WebRecorder:
             for pair in record(sdr=self.sdr, output_dir=self.output_dir,
                                center_freq=self.center_freq, offset_freq=self.offset_freq,
                                fft_len=self.fft_len, on_reconnect=track_reconnect):
-                clean_on = downsample_spectrum(clean_spectrum(pair.spectrum_on),
-                                               self.downsample)
-                clean_off = downsample_spectrum(clean_spectrum(pair.spectrum_off),
-                                                self.downsample)
                 with self.spectrum_lock:
                     self.last_pair = pair
-                    self.clean_on_buffer.append(clean_on)
-                    self.clean_off_buffer.append(clean_off)
-                    self.accumulated_diff = (average_spectra(self.clean_on_buffer)
-                                             - average_spectra(self.clean_off_buffer))
+                    self.on_buffer.append(pair.spectrum_on)
+                    self.off_buffer.append(pair.spectrum_off)
                 print(f"Saved spectrum: {pair.timestamp}")
                 if self.stop_requested:
                     break
@@ -141,15 +128,23 @@ class WebRecorder:
             if self.last_pair is None:
                 return None
             pair = self.last_pair
-            accumulated = None if self.accumulated_diff is None else self.accumulated_diff.copy()
+            spectra_on = list(self.on_buffer)
+            spectra_off = list(self.off_buffer)
+
+        reduce_kwargs = dict(downsample=self.downsample,
+                             center_freq=self.center_freq,
+                             sample_rate=self.sample_rate)
+        accumulated = reduce_spectrum_pairs(spectra_on, spectra_off, **reduce_kwargs)
+        last = reduce_spectrum_pairs([pair.spectrum_on], [pair.spectrum_off],
+                                     **reduce_kwargs)
 
         return {
             "on": (10 * np.log10(pair.spectrum_on + 1e-12)).tolist(),
             "off": (10 * np.log10(pair.spectrum_off + 1e-12)).tolist(),
-            "diff": pair.spectrum_diff.tolist(),
-            "accumulated": _nan_to_none(accumulated) if accumulated is not None else None,
+            "diff": _nan_to_none(last.spectrum_diff),
+            "accumulated": _nan_to_none(accumulated.spectrum_diff),
             "frequencies": self.frequencies.tolist(),
-            "accumulated_frequencies": self.accumulated_frequencies.tolist(),
+            "reduced_frequencies": accumulated.frequencies.tolist(),
         }
 
 

@@ -52,10 +52,12 @@ def test_full_recording_cycle(client, tmp_path):
         time.sleep(0.1)
     data = response.get_json()["data"]
     assert len(data["on"]) == len(data["frequencies"]) == 4096
-    # Accumulated spectrum is cleaned and downsampled like in the analysis API
-    assert len(data["accumulated"]) == len(data["accumulated_frequencies"]) == 409
-    assert any(value is None for value in data["accumulated"])  # masked DC channels
-    assert any(value is not None for value in data["accumulated"])
+    # Difference and accumulated spectra are cleaned and downsampled like in
+    # the analysis API
+    for key in ["diff", "accumulated"]:
+        assert len(data[key]) == len(data["reduced_frequencies"]) == 409
+        assert any(value is None for value in data[key])  # masked DC channels
+        assert any(value is not None for value in data[key])
 
     assert client.post("/api/recording/stop").get_json()["success"]
     assert client.post("/api/disconnect").get_json()["success"]

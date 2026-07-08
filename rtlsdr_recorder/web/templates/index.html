@@ -543,7 +543,7 @@
                     if (!charts.on) initializeCharts();
 
                     const freqs = data.data.frequencies;
-                    const toPoints = (arr) => freqs
+                    const toPoints = (arr, xs = freqs) => xs
                         .map((f, i) => ({ x: f, y: arr[i] }))
                         .filter(pt => Number.isFinite(pt.y));
 
@@ -552,7 +552,8 @@
                     charts.diff.data.datasets[0].data = toPoints(data.data.diff);
 
                     if (data.data.accumulated) {
-                        charts.accumulated.data.datasets[0].data = toPoints(data.data.accumulated);
+                        charts.accumulated.data.datasets[0].data = toPoints(
+                            data.data.accumulated, data.data.accumulated_frequencies);
                     }
 
                     Object.values(charts).forEach(c => c.update('none'));

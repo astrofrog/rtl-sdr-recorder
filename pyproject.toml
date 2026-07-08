@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtlsdr-recorder"
+version = "0.1.0"
+description = "Record and analyse HI 21cm spectra with an RTL-SDR dongle"
+requires-python = ">=3.11"
+dependencies = [
+    "astropy",
+    "click",
+    "flask",
+    "matplotlib",
+    "numpy",
+    "pyrtlsdr<0.4",
+    "scipy",
+    "setuptools<80",
+    "specutils",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
+[project.scripts]
+rtlsdr-recorder = "rtlsdr_recorder.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["rtlsdr_recorder*"]
+
+[tool.setuptools.package-data]
+"rtlsdr_recorder.web" = ["templates/*.html"]
+
+[tool.pytest.ini_options]
+markers = [
+    "hardware: tests that require a real RTL-SDR dongle to be plugged in",
+]
+addopts = "-m 'not hardware'"

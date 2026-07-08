@@ -1,11 +1,14 @@
 """
-Simulated RTL-SDR module for testing without hardware
+Simulated RTL-SDR dongle for testing without hardware.
 """
+
 import numpy as np
 
+__all__ = ["SimulatedRtlSdr"]
 
-class RtlSdr:
-    """Simulated RTL-SDR dongle"""
+
+class SimulatedRtlSdr:
+    """Simulated RTL-SDR dongle with the same interface as `rtlsdr.RtlSdr`."""
 
     def __init__(self):
         self.sample_rate = 2.4e6

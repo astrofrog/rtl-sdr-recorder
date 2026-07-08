@@ -19,6 +19,7 @@ from rtlsdr_recorder.recorder import (
     DEFAULT_OFFSET_FREQ,
     DEFAULT_SAMPLE_RATE,
     frequency_array,
+    load_settings,
 )
 
 __all__ = [
@@ -131,8 +132,13 @@ def reduce_spectra(directory, **kwargs):
     """
     Load all matched on/off pairs from a directory of recorded spectra and
     reduce them with `reduce_spectrum_pairs`, which this accepts the keyword
-    arguments of.
+    arguments of. The frequency settings are taken from the settings file
+    saved alongside the data (or the recording defaults if there is none);
+    keyword arguments override both.
     """
+    settings = load_settings(directory)
+    kwargs.setdefault("center_freq", settings["center_freq"])
+    kwargs.setdefault("sample_rate", settings["sample_rate"])
     spectra_on, spectra_off = load_spectrum_pairs(directory)
     if not spectra_on:
         raise ValueError(f"No matched on/off spectra found in {directory}")

@@ -13,5 +13,7 @@ from rtlsdr_recorder.recorder import (  # noqa: F401
     capture_spectrum,
     capture_spectrum_pair,
     save_spectrum_pair,
+    save_settings,
+    load_settings,
     record,
 )

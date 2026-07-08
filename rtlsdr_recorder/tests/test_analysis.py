@@ -98,6 +98,17 @@ def test_reduce_spectra_empty(tmp_path):
         reduce_spectra(str(tmp_path))
 
 
+def test_reduce_spectra_uses_saved_settings(tmp_path):
+    list(record(simulated=True, output_dir=str(tmp_path), count=1,
+                center_freq=1421e6, offset_freq=1417e6))
+    reduced = reduce_spectra(str(tmp_path))
+    assert reduced.frequencies[len(reduced.frequencies) // 2] == pytest.approx(1421.0, abs=0.01)
+    # Without the settings file, fall back to the default frequencies
+    (tmp_path / "settings.json").unlink()
+    reduced = reduce_spectra(str(tmp_path))
+    assert reduced.frequencies[len(reduced.frequencies) // 2] == pytest.approx(1420.0, abs=0.01)
+
+
 def test_plot_spectrum_pair(raw_dir):
     spectra_on, spectra_off = load_spectrum_pairs(str(raw_dir))
     fig = plot_spectrum_pair(spectra_on[0], spectra_off[0], lw=0.5)

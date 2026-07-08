@@ -2,6 +2,7 @@
 Functional API for acquiring spectra with an RTL-SDR dongle.
 """
 
+import json
 import os
 import time
 from datetime import datetime
@@ -26,6 +27,8 @@ __all__ = [
     "capture_spectrum",
     "capture_spectrum_pair",
     "save_spectrum_pair",
+    "save_settings",
+    "load_settings",
     "record",
 ]
 
@@ -34,6 +37,8 @@ DEFAULT_OFFSET_FREQ = 1416e6  # 4 MHz below, no overlap with on-frequency band
 DEFAULT_SAMPLE_RATE = 2.4e6
 DEFAULT_GAIN = 49.6
 DEFAULT_FFT_LEN = 4096
+
+SETTINGS_FILENAME = "settings.json"
 
 
 class RecordingError(RuntimeError):
@@ -126,6 +131,46 @@ def save_spectrum_pair(pair, output_dir="raw"):
     return paths
 
 
+def save_settings(output_dir, settings):
+    """
+    Save recording settings alongside the recorded spectra. If a settings
+    file already exists with different values, raise an error rather than
+    mix data recorded with different settings in one directory.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, SETTINGS_FILENAME)
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = json.load(f)
+        if existing != settings:
+            raise ValueError(f"{path} contains different settings from the "
+                             "current recording; use a different output directory")
+    else:
+        with open(path, "w") as f:
+            json.dump(settings, f, indent=2)
+    return path
+
+
+def load_settings(directory):
+    """
+    Return the recording settings for a directory of recorded spectra. Data
+    recorded before settings files existed used the defaults, so if there is
+    no settings file the defaults are returned.
+    """
+    settings = {
+        "center_freq": DEFAULT_CENTER_FREQ,
+        "offset_freq": DEFAULT_OFFSET_FREQ,
+        "sample_rate": DEFAULT_SAMPLE_RATE,
+        "gain": DEFAULT_GAIN,
+        "fft_len": DEFAULT_FFT_LEN,
+    }
+    path = os.path.join(directory, SETTINGS_FILENAME)
+    if os.path.exists(path):
+        with open(path) as f:
+            settings.update(json.load(f))
+    return settings
+
+
 def _reopen_sdr(sdr, simulated):
     try:
         sdr.close()
@@ -161,6 +206,12 @@ def record(sdr=None, output_dir="raw", center_freq=DEFAULT_CENTER_FREQ,
     retries = 0
     captured = 0
     try:
+        if output_dir is not None:
+            save_settings(output_dir, {"center_freq": center_freq,
+                                       "offset_freq": offset_freq,
+                                       "sample_rate": sdr.sample_rate,
+                                       "gain": sdr.gain,
+                                       "fft_len": fft_len})
         while count is None or captured < count:
             try:
                 pair = capture_spectrum_pair(sdr, center_freq=center_freq,

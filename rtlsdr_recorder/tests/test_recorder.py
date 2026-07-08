@@ -5,9 +5,13 @@ from rtlsdr_recorder import recorder
 from rtlsdr_recorder.recorder import (
     DEFAULT_CENTER_FREQ,
     DEFAULT_FFT_LEN,
+    DEFAULT_GAIN,
+    DEFAULT_OFFSET_FREQ,
+    DEFAULT_SAMPLE_RATE,
     RecordingError,
     capture_spectrum_pair,
     frequency_array,
+    load_settings,
     open_sdr,
     record,
     set_bias_tee,
@@ -52,6 +56,30 @@ def test_record_saves_files(tmp_path):
     assert len(list(tmp_path.glob("*_diff.npy"))) == 2
     loaded = np.load(sorted(tmp_path.glob("*_on.npy"))[0])
     np.testing.assert_allclose(loaded, pairs[0].spectrum_on)
+
+
+def test_record_saves_settings(tmp_path):
+    list(record(simulated=True, output_dir=str(tmp_path), count=1,
+                center_freq=1421e6))
+    settings = load_settings(str(tmp_path))
+    assert settings == {"center_freq": 1421e6,
+                        "offset_freq": DEFAULT_OFFSET_FREQ,
+                        "sample_rate": DEFAULT_SAMPLE_RATE,
+                        "gain": DEFAULT_GAIN,
+                        "fft_len": DEFAULT_FFT_LEN}
+    # Recording again with the same settings is fine, different ones are not
+    list(record(simulated=True, output_dir=str(tmp_path), count=1,
+                center_freq=1421e6))
+    with pytest.raises(ValueError, match="different settings"):
+        list(record(simulated=True, output_dir=str(tmp_path), count=1))
+
+
+def test_load_settings_missing_file(tmp_path):
+    assert load_settings(str(tmp_path)) == {"center_freq": DEFAULT_CENTER_FREQ,
+                                            "offset_freq": DEFAULT_OFFSET_FREQ,
+                                            "sample_rate": DEFAULT_SAMPLE_RATE,
+                                            "gain": DEFAULT_GAIN,
+                                            "fft_len": DEFAULT_FFT_LEN}
 
 
 def test_record_without_saving(tmp_path):

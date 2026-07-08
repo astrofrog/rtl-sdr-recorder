@@ -1,5 +1,6 @@
 flask
-rtl-sdr
+pyrtlsdr<0.4
+setuptools<80
 numpy
 matplotlib
 astropy

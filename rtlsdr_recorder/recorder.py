@@ -29,6 +29,7 @@ __all__ = [
     "save_spectrum_pair",
     "save_settings",
     "load_settings",
+    "timestamped_output_dir",
     "record",
 ]
 
@@ -171,6 +172,11 @@ def load_settings(directory):
     return settings
 
 
+def timestamped_output_dir():
+    """Return an output directory name based on the current time."""
+    return datetime.now().strftime("raw-%Y-%m-%d-%H-%M-%S")
+
+
 def _reopen_sdr(sdr, simulated):
     try:
         sdr.close()
@@ -180,7 +186,7 @@ def _reopen_sdr(sdr, simulated):
     return open_sdr(simulated=simulated, sample_rate=sdr.sample_rate, gain=sdr.gain)
 
 
-def record(sdr=None, output_dir="raw", center_freq=DEFAULT_CENTER_FREQ,
+def record(sdr=None, output_dir="auto", center_freq=DEFAULT_CENTER_FREQ,
            offset_freq=DEFAULT_OFFSET_FREQ, fft_len=DEFAULT_FFT_LEN,
            sample_rate=DEFAULT_SAMPLE_RATE, gain=DEFAULT_GAIN, simulated=False,
            count=None, max_retries=3, on_reconnect=None):
@@ -188,8 +194,10 @@ def record(sdr=None, output_dir="raw", center_freq=DEFAULT_CENTER_FREQ,
     Record on/off spectrum pairs, yielding a `SpectrumPair` after each capture.
 
     If ``sdr`` is None, a dongle is opened (and closed again at the end);
-    otherwise the given one is used. Pairs are saved to ``output_dir`` unless
-    it is None. Recording continues until ``count`` pairs have been captured
+    otherwise the given one is used. Pairs are saved to ``output_dir``: the
+    default "auto" uses a new ``raw-YYYY-MM-DD-HH-MM-SS`` directory named
+    after the recording start time, and None disables saving. Recording
+    continues until ``count`` pairs have been captured
     (forever if None) or the consumer stops iterating. On capture errors the
     dongle is reopened, calling ``on_reconnect(new_sdr)`` if given so that the
     caller can track the new handle; after ``max_retries`` consecutive
@@ -202,6 +210,9 @@ def record(sdr=None, output_dir="raw", center_freq=DEFAULT_CENTER_FREQ,
     else:
         simulated = isinstance(sdr, SimulatedRtlSdr)
         owns_sdr = False
+
+    if output_dir == "auto":
+        output_dir = timestamped_output_dir()
 
     retries = 0
     captured = 0

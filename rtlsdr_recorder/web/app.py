@@ -19,6 +19,7 @@ from rtlsdr_recorder.recorder import (
     open_sdr,
     record,
     set_bias_tee,
+    timestamped_output_dir,
 )
 
 __all__ = ["WebRecorder", "create_app"]
@@ -29,7 +30,7 @@ class WebRecorder:
 
     def __init__(self, simulated=False, center_freq=DEFAULT_CENTER_FREQ,
                  offset_freq=DEFAULT_OFFSET_FREQ, sample_rate=DEFAULT_SAMPLE_RATE,
-                 gain=DEFAULT_GAIN, fft_len=DEFAULT_FFT_LEN, output_dir="raw",
+                 gain=DEFAULT_GAIN, fft_len=DEFAULT_FFT_LEN, output_dir="auto",
                  downsample=10):
         self.simulated = simulated
         self.center_freq = center_freq
@@ -38,6 +39,7 @@ class WebRecorder:
         self.gain = gain
         self.fft_len = fft_len
         self.output_dir = output_dir
+        self.session_dir = None
         self.downsample = downsample
         self.frequencies = frequency_array(center_freq, sample_rate, fft_len)
 
@@ -89,13 +91,14 @@ class WebRecorder:
             return False, "Already recording"
         if not self.connected:
             return False, "Dongle not connected"
+        if self.session_dir is None:
+            self.session_dir = (timestamped_output_dir() if self.output_dir == "auto"
+                                else self.output_dir)
         self.recording = True
         self.stop_requested = False
-        self.on_buffer = []
-        self.off_buffer = []
         self.recording_thread = threading.Thread(target=self._recording_loop, daemon=True)
         self.recording_thread.start()
-        return True, "Recording started"
+        return True, f"Recording to {self.session_dir}"
 
     def stop_recording(self):
         self.stop_requested = True
@@ -103,12 +106,24 @@ class WebRecorder:
         if self.recording_thread is not None:
             self.recording_thread.join(timeout=2)
 
+    def reset_session(self):
+        """Stop recording if active and start a fresh session: clear the
+        accumulated spectra and use a new output directory next time."""
+        if self.recording:
+            self.stop_recording()
+        with self.spectrum_lock:
+            self.last_pair = None
+            self.on_buffer = []
+            self.off_buffer = []
+        self.session_dir = None
+        return True, "Session reset; recording will use a new output folder"
+
     def _recording_loop(self):
         def track_reconnect(sdr):
             self.sdr = sdr
 
         try:
-            for pair in record(sdr=self.sdr, output_dir=self.output_dir,
+            for pair in record(sdr=self.sdr, output_dir=self.session_dir,
                                center_freq=self.center_freq, offset_freq=self.offset_freq,
                                fft_len=self.fft_len, on_reconnect=track_reconnect):
                 with self.spectrum_lock:
@@ -170,6 +185,7 @@ def create_app(**recorder_kwargs):
             "bias_tee_enabled": recorder.bias_tee_enabled,
             "recording": recorder.recording,
             "simulated": recorder.simulated,
+            "output_dir": recorder.session_dir,
         })
 
     @app.route("/api/connect", methods=["POST"])
@@ -206,7 +222,12 @@ def create_app(**recorder_kwargs):
         if not recorder.recording:
             return jsonify({"success": False, "message": "Not recording"}), 400
         recorder.stop_recording()
-        return jsonify({"success": True, "message": "Recording stopped"})
+        return jsonify({"success": True, "message": "Recording paused"})
+
+    @app.route("/api/recording/reset", methods=["POST"])
+    def reset_recording():
+        success, message = recorder.reset_session()
+        return jsonify({"success": success, "message": message})
 
     @app.route("/api/spectrum/plot")
     def get_spectrum_plot():

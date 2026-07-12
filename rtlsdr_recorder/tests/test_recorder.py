@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -80,6 +82,16 @@ def test_load_settings_missing_file(tmp_path):
                                             "sample_rate": DEFAULT_SAMPLE_RATE,
                                             "gain": DEFAULT_GAIN,
                                             "fft_len": DEFAULT_FFT_LEN}
+
+
+def test_record_auto_output_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    list(record(simulated=True, count=1))
+    directories = list(tmp_path.iterdir())
+    assert len(directories) == 1
+    assert re.fullmatch(r"raw-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}",
+                        directories[0].name)
+    assert len(list(directories[0].glob("*.npy"))) == 3
 
 
 def test_record_without_saving(tmp_path):

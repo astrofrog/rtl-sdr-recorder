@@ -299,9 +299,11 @@
             <div class="card">
                 <h2>Recording</h2>
                 <p>Status: <span id="recordingStatus" class="status inactive">Stopped</span></p>
+                <p>Folder: <span id="outputDir">none yet</span></p>
                 <div class="button-group">
                     <button class="btn-success" id="recordStartBtn" onclick="startRecording()" disabled>Start</button>
-                    <button class="btn-danger" id="recordStopBtn" onclick="stopRecording()" disabled>Stop</button>
+                    <button class="btn-warning" id="recordPauseBtn" onclick="pauseRecording()" disabled>Pause</button>
+                    <button class="btn-danger" id="recordResetBtn" onclick="resetRecording()">Reset</button>
                 </div>
                 <div id="recordingMessage" class="message"></div>
             </div>
@@ -442,24 +444,26 @@
 
                 // Update recording status
                 const recordingStatus = document.getElementById('recordingStatus');
-                const recordStopBtn = document.getElementById('recordStopBtn');
+                const recordPauseBtn = document.getElementById('recordPauseBtn');
+
+                document.getElementById('outputDir').textContent = data.output_dir || 'none yet';
 
                 if (data.recording) {
                     recordingStatus.textContent = 'Recording';
                     recordingStatus.className = 'status active';
                     recordStartBtn.disabled = true;
-                    recordStopBtn.disabled = false;
+                    recordPauseBtn.disabled = false;
                 } else {
-                    recordingStatus.textContent = 'Stopped';
+                    recordingStatus.textContent = data.output_dir ? 'Paused' : 'Stopped';
                     recordingStatus.className = 'status inactive';
                     recordStartBtn.disabled = !data.connected;
-                    recordStopBtn.disabled = true;
+                    recordPauseBtn.disabled = true;
                 }
 
                 // Disable recording buttons if not connected
                 if (!data.connected) {
                     recordStartBtn.disabled = true;
-                    recordStopBtn.disabled = true;
+                    recordPauseBtn.disabled = true;
                     document.getElementById('biasTeeSwitch').parentElement.parentElement.style.opacity = '0.5';
                     document.getElementById('biasTeeSwitch').parentElement.parentElement.style.pointerEvents = 'none';
                 } else {
@@ -522,14 +526,31 @@
             }
         }
 
-        async function stopRecording() {
+        async function pauseRecording() {
             try {
                 const response = await fetch('/api/recording/stop', { method: 'POST' });
                 const data = await response.json();
                 showMessage('recordingMessage', data.message, data.success ? 'success' : 'error');
                 updateStatus();
             } catch (error) {
-                showMessage('recordingMessage', 'Error stopping recording', 'error');
+                showMessage('recordingMessage', 'Error pausing recording', 'error');
+            }
+        }
+
+        async function resetRecording() {
+            try {
+                const response = await fetch('/api/recording/reset', { method: 'POST' });
+                const data = await response.json();
+                showMessage('recordingMessage', data.message, data.success ? 'success' : 'error');
+                // Clear the plots since the accumulated spectra were reset
+                Object.values(charts).forEach(c => {
+                    c.data.datasets[0].data = [];
+                    c.update('none');
+                });
+                document.getElementById('plotMessage').style.display = 'block';
+                updateStatus();
+            } catch (error) {
+                showMessage('recordingMessage', 'Error resetting session', 'error');
             }
         }
 

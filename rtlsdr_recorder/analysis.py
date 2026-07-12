@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 
-def load_spectrum_pairs(directory):
+def load_spectrum_pairs(directory, limit=None):
     """
     Load all matched on/off spectra from a directory of ``spectrum_*_{on,off}.npy``
     files, returning ``(spectra_on, spectra_off)`` as two lists of arrays.
@@ -48,6 +48,8 @@ def load_spectrum_pairs(directory):
         if os.path.exists(filename_off):
             spectra_on.append(np.load(filename_on))
             spectra_off.append(np.load(filename_off))
+            if limit is not None and len(spectra_on) >= limit:
+                break
     return spectra_on, spectra_off
 
 
@@ -128,7 +130,7 @@ def reduce_spectrum_pairs(spectra_on, spectra_off, downsample=10, sigma=3,
     return ReducedSpectra(frequencies, average_on, average_off, average_diff)
 
 
-def reduce_spectra(directory, **kwargs):
+def reduce_spectra(directory, limit=None, **kwargs):
     """
     Load all matched on/off pairs from a directory of recorded spectra and
     reduce them with `reduce_spectrum_pairs`, which this accepts the keyword
@@ -139,7 +141,7 @@ def reduce_spectra(directory, **kwargs):
     settings = load_settings(directory)
     kwargs.setdefault("center_freq", settings["center_freq"])
     kwargs.setdefault("sample_rate", settings["sample_rate"])
-    spectra_on, spectra_off = load_spectrum_pairs(directory)
+    spectra_on, spectra_off = load_spectrum_pairs(directory, limit=limit)
     if not spectra_on:
         raise ValueError(f"No matched on/off spectra found in {directory}")
     return reduce_spectrum_pairs(spectra_on, spectra_off, **kwargs)

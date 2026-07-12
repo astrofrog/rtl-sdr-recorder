@@ -42,6 +42,7 @@ class WebRecorder:
         self.session_dir = None
         self.downsample = downsample
         self.frequencies = frequency_array(center_freq, sample_rate, fft_len)
+        self.off_frequencies = frequency_array(offset_freq, sample_rate, fft_len)
 
         self.sdr = None
         self.connected = False
@@ -159,6 +160,7 @@ class WebRecorder:
             "diff": _nan_to_none(last.spectrum_diff),
             "accumulated": _nan_to_none(accumulated.spectrum_diff),
             "frequencies": self.frequencies.tolist(),
+            "off_frequencies": self.off_frequencies.tolist(),
             "reduced_frequencies": accumulated.frequencies.tolist(),
         }
 

@@ -56,6 +56,10 @@ def test_full_recording_cycle(client, tmp_path):
 
     data = wait_for_spectrum(client).get_json()["data"]
     assert len(data["on"]) == len(data["frequencies"]) == 4096
+    assert len(data["off"]) == len(data["off_frequencies"]) == 4096
+    # The off-frequency axis is centered on the offset frequency, 4 MHz below
+    assert data["off_frequencies"][2048] == pytest.approx(1416.0)
+    assert data["frequencies"][2048] == pytest.approx(1420.0)
     # Difference and accumulated spectra are cleaned and downsampled like in
     # the analysis API
     for key in ["diff", "accumulated"]:

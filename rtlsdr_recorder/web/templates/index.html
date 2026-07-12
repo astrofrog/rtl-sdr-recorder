@@ -569,7 +569,8 @@
                         .filter(pt => Number.isFinite(pt.y));
 
                     charts.on.data.datasets[0].data = toPoints(data.data.on);
-                    charts.off.data.datasets[0].data = toPoints(data.data.off);
+                    charts.off.data.datasets[0].data = toPoints(
+                        data.data.off, data.data.off_frequencies);
                     charts.diff.data.datasets[0].data = toPoints(
                         data.data.diff, data.data.reduced_frequencies);
 

@@ -207,6 +207,33 @@
             left: 24px;
         }
 
+        .settings-card {
+            margin-bottom: 30px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .settings-grid label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #666;
+        }
+
+        .settings-grid input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
         .plot-section {
             margin-top: 30px;
         }
@@ -307,6 +334,35 @@
                 </div>
                 <div id="recordingMessage" class="message"></div>
             </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="card settings-card">
+            <h2>Settings</h2>
+            <div class="settings-grid">
+                <label>Center frequency
+                    <input id="settingCenterFreq" type="text">
+                </label>
+                <label>Offset frequency
+                    <input id="settingOffsetFreq" type="text">
+                </label>
+                <label>Sample rate
+                    <input id="settingSampleRate" type="text">
+                </label>
+                <label>Gain (dB)
+                    <input id="settingGain" type="number" step="0.1">
+                </label>
+                <label>FFT length
+                    <input id="settingFftLen" type="number" step="1" min="2">
+                </label>
+                <label>Downsample
+                    <input id="settingDownsample" type="number" step="1" min="1">
+                </label>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="applySettings()">Apply (resets session)</button>
+            </div>
+            <div id="settingsMessage" class="message"></div>
         </div>
 
         <!-- Plot Section -->
@@ -537,20 +593,72 @@
             }
         }
 
+        function clearCharts() {
+            Object.values(charts).forEach(c => {
+                c.data.datasets[0].data = [];
+                c.update('none');
+            });
+            document.getElementById('plotMessage').style.display = 'block';
+        }
+
         async function resetRecording() {
             try {
                 const response = await fetch('/api/recording/reset', { method: 'POST' });
                 const data = await response.json();
                 showMessage('recordingMessage', data.message, data.success ? 'success' : 'error');
                 // Clear the plots since the accumulated spectra were reset
-                Object.values(charts).forEach(c => {
-                    c.data.datasets[0].data = [];
-                    c.update('none');
-                });
-                document.getElementById('plotMessage').style.display = 'block';
+                clearCharts();
                 updateStatus();
             } catch (error) {
                 showMessage('recordingMessage', 'Error resetting session', 'error');
+            }
+        }
+
+        function formatFrequency(hz) {
+            return (hz / 1e6) + ' MHz';
+        }
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const s = await response.json();
+                document.getElementById('settingCenterFreq').value = formatFrequency(s.center_freq);
+                document.getElementById('settingOffsetFreq').value = formatFrequency(s.offset_freq);
+                document.getElementById('settingSampleRate').value = formatFrequency(s.sample_rate);
+                document.getElementById('settingGain').value = s.gain;
+                document.getElementById('settingFftLen').value = s.fft_len;
+                document.getElementById('settingDownsample').value = s.downsample;
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        async function applySettings() {
+            const body = {
+                center_freq: document.getElementById('settingCenterFreq').value,
+                offset_freq: document.getElementById('settingOffsetFreq').value,
+                sample_rate: document.getElementById('settingSampleRate').value,
+                gain: parseFloat(document.getElementById('settingGain').value),
+                fft_len: parseInt(document.getElementById('settingFftLen').value),
+                downsample: parseInt(document.getElementById('settingDownsample').value)
+            };
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                showMessage('settingsMessage', data.message, data.success ? 'success' : 'error');
+                if (data.success) {
+                    // Applying settings reset the session, so clear the plots
+                    // and show the normalized values
+                    clearCharts();
+                    loadSettings();
+                }
+                updateStatus();
+            } catch (error) {
+                showMessage('settingsMessage', 'Error applying settings', 'error');
             }
         }
 
@@ -589,8 +697,9 @@
             }
         }
 
-        // Initial status update
+        // Initial status and settings
         updateStatus();
+        loadSettings();
     </script>
 </body>
 </html>

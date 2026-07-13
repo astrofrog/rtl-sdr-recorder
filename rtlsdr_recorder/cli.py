@@ -1,7 +1,7 @@
 import click
 from astropy import units as u
 
-from rtlsdr_recorder.recorder import DEFAULT_GAIN, DEFAULT_FFT_LEN
+from rtlsdr_recorder.recorder import DEFAULT_GAIN, DEFAULT_FFT_LEN, parse_frequency
 
 
 class FrequencyType(click.ParamType):
@@ -11,15 +11,11 @@ class FrequencyType(click.ParamType):
 
     def convert(self, value, param, ctx):
         try:
-            quantity = u.Quantity(value)
-        except Exception:
-            self.fail(f"{value!r} is not a valid frequency", param, ctx)
-        if quantity.unit == u.dimensionless_unscaled:
-            return float(quantity.value)
-        try:
-            return quantity.to_value(u.Hz)
+            return parse_frequency(value)
         except u.UnitConversionError:
             self.fail(f"{value!r} is not a frequency", param, ctx)
+        except Exception:
+            self.fail(f"{value!r} is not a valid frequency", param, ctx)
 
 
 FREQUENCY = FrequencyType()

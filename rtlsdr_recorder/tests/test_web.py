@@ -73,6 +73,66 @@ def test_full_recording_cycle(client, tmp_path):
     assert list(tmp_path.glob("*_on.npy"))
 
 
+def test_settings(client):
+    settings = client.get("/api/settings").get_json()
+    assert settings == {"center_freq": 1420e6, "offset_freq": 1416e6,
+                        "sample_rate": 2.4e6, "gain": 49.6, "fft_len": 4096,
+                        "downsample": 10}
+
+    response = client.post("/api/settings", json={"offset_freq": "1417 MHz",
+                                                  "downsample": 8})
+    assert response.get_json()["success"]
+    settings = client.get("/api/settings").get_json()
+    assert settings["offset_freq"] == 1417e6
+    assert settings["downsample"] == 8
+    assert settings["center_freq"] == 1420e6  # unchanged
+
+    assert client.post("/api/settings", json={"center_freq": "12 km"}).status_code == 400
+    assert client.post("/api/settings", json={"downsample": 0}).status_code == 400
+    assert client.post("/api/settings", json={"gain": "loud"}).status_code == 400
+
+
+def test_settings_reset_session_and_retune(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    app = create_app(simulated=True)
+    with app.test_client() as client:
+        assert client.post("/api/connect").get_json()["success"]
+        assert client.post("/api/recording/start").get_json()["success"]
+        wait_for_spectrum(client)
+
+        response = client.post("/api/settings", json={"center_freq": "1421 MHz"})
+        assert response.get_json()["success"]
+
+        # Applying settings stopped the recording and reset the session
+        status = client.get("/api/status").get_json()
+        assert not status["recording"]
+        assert status["output_dir"] is None
+        assert client.get("/api/spectrum/plot").status_code == 400
+
+        # The connected (simulated) dongle was retuned in place
+        assert app.config["RECORDER"].sdr.center_freq == 1421e6
+
+        # Recording again goes to a new folder and uses the new frequency axis
+        assert client.post("/api/recording/start").get_json()["success"]
+        data = wait_for_spectrum(client).get_json()["data"]
+        assert data["frequencies"][2048] == pytest.approx(1421.0)
+        assert len(list(tmp_path.iterdir())) == 2
+    app.config["RECORDER"].disconnect()
+
+
+def test_settings_change_with_fixed_output_dir(client):
+    # With an explicit output directory, recording after a settings change
+    # is refused at start rather than mixing settings in one directory
+    assert client.post("/api/connect").get_json()["success"]
+    assert client.post("/api/recording/start").get_json()["success"]
+    assert client.post("/api/recording/stop").get_json()["success"]
+    assert client.post("/api/settings",
+                       json={"center_freq": "1421 MHz"}).get_json()["success"]
+    response = client.post("/api/recording/start")
+    assert response.status_code == 400
+    assert "different settings" in response.get_json()["message"]
+
+
 def test_sessions(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     session_names = iter(["session-1", "session-2"])

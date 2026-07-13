@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import NamedTuple
 
 import numpy as np
+from astropy import units as u
 
 from rtlsdr_recorder.simulate import SimulatedRtlSdr
 
@@ -20,6 +21,7 @@ __all__ = [
     "DEFAULT_FFT_LEN",
     "RecordingError",
     "SpectrumPair",
+    "parse_frequency",
     "open_sdr",
     "set_bias_tee",
     "frequency_array",
@@ -29,6 +31,7 @@ __all__ = [
     "save_spectrum_pair",
     "save_settings",
     "load_settings",
+    "recording_settings",
     "timestamped_output_dir",
     "record",
 ]
@@ -53,6 +56,18 @@ class SpectrumPair(NamedTuple):
     spectrum_on: np.ndarray
     spectrum_off: np.ndarray
     spectrum_diff: np.ndarray
+
+
+def parse_frequency(value):
+    """
+    Parse a frequency given as a number (in Hz) or a string with a unit
+    (e.g. "1420.2MHz"). Raises `astropy.units.UnitConversionError` if the
+    unit is not one of frequency.
+    """
+    quantity = u.Quantity(value)
+    if quantity.unit == u.dimensionless_unscaled:
+        return float(quantity.value)
+    return quantity.to_value(u.Hz)
 
 
 def open_sdr(simulated=False, sample_rate=DEFAULT_SAMPLE_RATE,
@@ -173,8 +188,25 @@ def load_settings(directory):
 
 
 def timestamped_output_dir():
-    """Return an output directory name based on the current time."""
-    return datetime.now().strftime("raw-%Y-%m-%d-%H-%M-%S")
+    """Return a new output directory name based on the current time."""
+    base = datetime.now().strftime("raw-%Y-%m-%d-%H-%M-%S")
+    name = base
+    counter = 2
+    while os.path.exists(name):
+        name = f"{base}-{counter}"
+        counter += 1
+    return name
+
+
+def recording_settings(sdr, center_freq=DEFAULT_CENTER_FREQ,
+                       offset_freq=DEFAULT_OFFSET_FREQ, fft_len=DEFAULT_FFT_LEN):
+    """Return the settings dictionary describing a recording made with the
+    given dongle, as saved alongside the recorded spectra."""
+    return {"center_freq": center_freq,
+            "offset_freq": offset_freq,
+            "sample_rate": sdr.sample_rate,
+            "gain": sdr.gain,
+            "fft_len": fft_len}
 
 
 def _reopen_sdr(sdr, simulated):
@@ -218,11 +250,8 @@ def record(sdr=None, output_dir="auto", center_freq=DEFAULT_CENTER_FREQ,
     captured = 0
     try:
         if output_dir is not None:
-            save_settings(output_dir, {"center_freq": center_freq,
-                                       "offset_freq": offset_freq,
-                                       "sample_rate": sdr.sample_rate,
-                                       "gain": sdr.gain,
-                                       "fft_len": fft_len})
+            save_settings(output_dir, recording_settings(sdr, center_freq,
+                                                         offset_freq, fft_len))
         while count is None or captured < count:
             try:
                 pair = capture_spectrum_pair(sdr, center_freq=center_freq,

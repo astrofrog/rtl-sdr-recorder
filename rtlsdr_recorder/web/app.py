@@ -17,7 +17,10 @@ from rtlsdr_recorder.recorder import (
     DEFAULT_FFT_LEN,
     frequency_array,
     open_sdr,
+    parse_frequency,
     record,
+    recording_settings,
+    save_settings,
     set_bias_tee,
     timestamped_output_dir,
 )
@@ -95,6 +98,14 @@ class WebRecorder:
         if self.session_dir is None:
             self.session_dir = (timestamped_output_dir() if self.output_dir == "auto"
                                 else self.output_dir)
+        try:
+            # Fail here rather than in the recording thread if the directory
+            # was already used with different settings
+            save_settings(self.session_dir,
+                          recording_settings(self.sdr, self.center_freq,
+                                             self.offset_freq, self.fft_len))
+        except ValueError as e:
+            return False, str(e)
         self.recording = True
         self.stop_requested = False
         self.recording_thread = threading.Thread(target=self._recording_loop, daemon=True)
@@ -106,6 +117,52 @@ class WebRecorder:
         self.recording = False
         if self.recording_thread is not None:
             self.recording_thread.join(timeout=2)
+
+    def get_settings(self):
+        return {
+            "center_freq": self.center_freq,
+            "offset_freq": self.offset_freq,
+            "sample_rate": self.sample_rate,
+            "gain": self.gain,
+            "fft_len": self.fft_len,
+            "downsample": self.downsample,
+        }
+
+    def apply_settings(self, settings):
+        """Apply new settings, stopping recording and resetting the session
+        since a directory's settings file must describe all its data."""
+        try:
+            center_freq = parse_frequency(settings.get("center_freq", self.center_freq))
+            offset_freq = parse_frequency(settings.get("offset_freq", self.offset_freq))
+            sample_rate = parse_frequency(settings.get("sample_rate", self.sample_rate))
+            gain = float(settings.get("gain", self.gain))
+            fft_len = int(settings.get("fft_len", self.fft_len))
+            downsample = int(settings.get("downsample", self.downsample))
+            if sample_rate <= 0 or fft_len < 2 or not 1 <= downsample <= fft_len:
+                raise ValueError("sample rate, FFT length, and downsample "
+                                 "factor must be positive (and the downsample "
+                                 "factor no larger than the FFT length)")
+        except Exception as e:
+            return False, f"Invalid settings: {e}"
+
+        self.reset_session()
+        self.center_freq = center_freq
+        self.offset_freq = offset_freq
+        self.sample_rate = sample_rate
+        self.gain = gain
+        self.fft_len = fft_len
+        self.downsample = downsample
+        self.frequencies = frequency_array(center_freq, sample_rate, fft_len)
+        self.off_frequencies = frequency_array(offset_freq, sample_rate, fft_len)
+
+        if self.sdr is not None:
+            try:
+                self.sdr.sample_rate = sample_rate
+                self.sdr.center_freq = center_freq
+                self.sdr.gain = gain
+            except Exception as e:
+                return False, f"Settings applied but retuning the dongle failed: {e}"
+        return True, "Settings applied; session reset"
 
     def reset_session(self):
         """Stop recording if active and start a fresh session: clear the
@@ -230,6 +287,17 @@ def create_app(**recorder_kwargs):
     def reset_recording():
         success, message = recorder.reset_session()
         return jsonify({"success": success, "message": message})
+
+    @app.route("/api/settings")
+    def get_settings():
+        return jsonify(recorder.get_settings())
+
+    @app.route("/api/settings", methods=["POST"])
+    def set_settings():
+        success, message = recorder.apply_settings(request.get_json() or {})
+        if not success:
+            return jsonify({"success": False, "message": message}), 400
+        return jsonify({"success": True, "message": message})
 
     @app.route("/api/spectrum/plot")
     def get_spectrum_plot():

@@ -44,7 +44,7 @@ def test_options(monkeypatch):
     assert created["center_freq"] == 1420.2e6
     assert created["offset_freq"] == 1416e6
     assert created["sample_rate"] == 1e6
-    assert created["output_dir"] == "auto"
+    assert created["output_dir"] == "raw-<date>"
     assert created["app"].run_kwargs == {"host": "127.0.0.1", "port": 8080}
     assert created["app"].disconnected
     assert opened == ["http://127.0.0.1:8080"]

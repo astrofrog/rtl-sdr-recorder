@@ -29,10 +29,11 @@ def test_index(client):
     assert b"Radio Recorder" in response.data
 
 
-def test_status_initially_disconnected(client):
+def test_status_initially_disconnected(client, tmp_path):
     status = client.get("/api/status").get_json()
     assert status == {"connected": False, "bias_tee_enabled": False,
-                      "recording": False, "simulated": True, "output_dir": None}
+                      "recording": False, "simulated": True,
+                      "output_dir": None, "output_template": str(tmp_path)}
 
 
 def test_requires_connection(client):
@@ -73,23 +74,14 @@ def test_full_recording_cycle(client, tmp_path):
     assert list(tmp_path.glob("*_on.npy"))
 
 
-def test_settings(client, tmp_path):
+def test_settings(client):
     settings = client.get("/api/settings").get_json()
     valid_gains = settings.pop("valid_gains")
     assert valid_gains[0] == 0.0
     assert valid_gains[-1] == 49.6
     assert settings == {"center_freq": 1420e6, "offset_freq": 1416e6,
                         "sample_rate": 2.4e6, "gain": 49.6, "fft_len": 4096,
-                        "downsample": 10, "output_dir": str(tmp_path)}
-
-    # The output folder can be customized, and blank means the default
-    # timestamped scheme
-    assert client.post("/api/settings",
-                       json={"output_dir": "custom"}).get_json()["success"]
-    assert client.get("/api/settings").get_json()["output_dir"] == "custom"
-    assert client.post("/api/settings",
-                       json={"output_dir": "  "}).get_json()["success"]
-    assert client.get("/api/settings").get_json()["output_dir"] == "auto"
+                        "downsample": 10}
 
     # Gains snap to the nearest value supported by the dongle
     assert client.post("/api/settings", json={"gain": 30}).get_json()["success"]
@@ -152,8 +144,9 @@ def test_settings_change_with_fixed_output_dir(client):
 def test_sessions(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     session_names = iter(["session-1", "session-2"])
-    monkeypatch.setattr(rtlsdr_recorder.web.app, "timestamped_output_dir",
-                        lambda: next(session_names))
+    monkeypatch.setattr(rtlsdr_recorder.web.app, "resolve_output_dir",
+                        lambda template: (next(session_names)
+                                          if "<date>" in template else template))
 
     app = create_app(simulated=True)
     with app.test_client() as client:
@@ -181,11 +174,13 @@ def test_sessions(tmp_path, monkeypatch):
         assert client.get("/api/status").get_json()["output_dir"] == "session-2"
         wait_for_spectrum(client)
 
-        # A custom folder name can be set through the settings
-        assert client.post("/api/settings",
+        # A custom folder name can be given when starting a new session
+        assert client.post("/api/recording/reset").get_json()["success"]
+        assert client.post("/api/recording/start",
                            json={"output_dir": "custom"}).get_json()["success"]
-        assert client.post("/api/recording/start").get_json()["success"]
-        assert client.get("/api/status").get_json()["output_dir"] == "custom"
+        status = client.get("/api/status").get_json()
+        assert status["output_dir"] == "custom"
+        assert status["output_template"] == "custom"
         wait_for_spectrum(client)
 
     app.config["RECORDER"].disconnect()

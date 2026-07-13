@@ -15,6 +15,6 @@ from rtlsdr_recorder.recorder import (  # noqa: F401
     save_spectrum_pair,
     save_settings,
     load_settings,
-    timestamped_output_dir,
+    resolve_output_dir,
     record,
 )

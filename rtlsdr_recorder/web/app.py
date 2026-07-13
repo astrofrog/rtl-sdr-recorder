@@ -21,9 +21,9 @@ from rtlsdr_recorder.recorder import (
     parse_frequency,
     record,
     recording_settings,
+    resolve_output_dir,
     save_settings,
     set_bias_tee,
-    timestamped_output_dir,
 )
 
 __all__ = ["WebRecorder", "create_app"]
@@ -34,8 +34,8 @@ class WebRecorder:
 
     def __init__(self, simulated=False, center_freq=DEFAULT_CENTER_FREQ,
                  offset_freq=DEFAULT_OFFSET_FREQ, sample_rate=DEFAULT_SAMPLE_RATE,
-                 gain=DEFAULT_GAIN, fft_len=DEFAULT_FFT_LEN, output_dir="auto",
-                 downsample=10):
+                 gain=DEFAULT_GAIN, fft_len=DEFAULT_FFT_LEN,
+                 output_dir="raw-<date>", downsample=10):
         self.simulated = simulated
         self.center_freq = center_freq
         self.offset_freq = offset_freq
@@ -91,14 +91,17 @@ class WebRecorder:
         except Exception as e:
             return False, f"Error setting bias tee: {str(e)}"
 
-    def start_recording(self):
+    def start_recording(self, output_dir=None):
         if self.recording:
             return False, "Already recording"
         if not self.connected:
             return False, "Dongle not connected"
         if self.session_dir is None:
-            self.session_dir = (timestamped_output_dir() if self.output_dir == "auto"
-                                else self.output_dir)
+            # The folder (template) only applies to new sessions; resuming
+            # a paused one keeps recording to the same place
+            if output_dir is not None and str(output_dir).strip():
+                self.output_dir = str(output_dir).strip()
+            self.session_dir = resolve_output_dir(self.output_dir)
         try:
             # Fail here rather than in the recording thread if the directory
             # was already used with different settings
@@ -135,7 +138,6 @@ class WebRecorder:
             "fft_len": self.fft_len,
             "downsample": self.downsample,
             "valid_gains": self.valid_gains(),
-            "output_dir": self.output_dir,
         }
 
     def apply_settings(self, settings):
@@ -149,7 +151,6 @@ class WebRecorder:
                        key=lambda g: abs(g - float(settings.get("gain", self.gain))))
             fft_len = int(settings.get("fft_len", self.fft_len))
             downsample = int(settings.get("downsample", self.downsample))
-            output_dir = str(settings.get("output_dir", self.output_dir)).strip() or "auto"
             if sample_rate <= 0 or fft_len < 2 or not 1 <= downsample <= fft_len:
                 raise ValueError("sample rate, FFT length, and downsample "
                                  "factor must be positive (and the downsample "
@@ -164,7 +165,6 @@ class WebRecorder:
         self.gain = gain
         self.fft_len = fft_len
         self.downsample = downsample
-        self.output_dir = output_dir
         self.frequencies = frequency_array(center_freq, sample_rate, fft_len)
         self.off_frequencies = frequency_array(offset_freq, sample_rate, fft_len)
 
@@ -258,6 +258,7 @@ def create_app(**recorder_kwargs):
             "recording": recorder.recording,
             "simulated": recorder.simulated,
             "output_dir": recorder.session_dir,
+            "output_template": recorder.output_dir,
         })
 
     @app.route("/api/connect", methods=["POST"])
@@ -284,7 +285,8 @@ def create_app(**recorder_kwargs):
 
     @app.route("/api/recording/start", methods=["POST"])
     def start_recording():
-        success, message = recorder.start_recording()
+        data = request.get_json(silent=True) or {}
+        success, message = recorder.start_recording(data.get("output_dir"))
         if not success:
             return jsonify({"success": False, "message": message}), 400
         return jsonify({"success": True, "message": message})

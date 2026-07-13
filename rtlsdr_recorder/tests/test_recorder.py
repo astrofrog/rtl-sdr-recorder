@@ -94,6 +94,15 @@ def test_record_auto_output_dir(tmp_path, monkeypatch):
     assert len(list(directories[0].glob("*.npy"))) == 3
 
 
+def test_record_output_dir_template(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    list(record(simulated=True, count=1, output_dir="galplane-<date>"))
+    directories = list(tmp_path.iterdir())
+    assert len(directories) == 1
+    assert re.fullmatch(r"galplane-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}",
+                        directories[0].name)
+
+
 def test_record_without_saving(tmp_path):
     pairs = list(record(simulated=True, output_dir=None, count=1))
     assert len(pairs) == 1

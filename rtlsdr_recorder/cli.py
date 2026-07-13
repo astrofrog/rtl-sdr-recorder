@@ -43,9 +43,9 @@ FREQUENCY = FrequencyType()
               help="Tuner gain in dB.")
 @click.option("--fft-len", default=DEFAULT_FFT_LEN, show_default=True,
               help="Number of channels in each spectrum.")
-@click.option("--output-dir", default="auto",
-              help="Directory in which to save recorded spectra; by default "
-                   "each session uses a new raw-YYYY-MM-DD-HH-MM-SS directory.")
+@click.option("--output-dir", default="raw-<date>", show_default=True,
+              help="Directory in which to save recorded spectra; <date> is "
+                   "replaced by the time each recording session starts.")
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=5000, show_default=True)
 @click.option("--no-browser", is_flag=True,

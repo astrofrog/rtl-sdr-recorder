@@ -140,10 +140,22 @@
         }
 
         .settings-grid input,
-        .settings-grid select {
+        .settings-grid select,
+        .folder-input {
             padding: 8px 10px;
             border-radius: 6px;
             font-size: 13px;
+        }
+
+        .folder-input {
+            width: 100%;
+            margin-top: 4px;
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+
+        .folder-input:disabled {
+            opacity: 0.7;
         }
 
         .freq-input {
@@ -355,7 +367,8 @@
         }
 
         body[data-theme="light"] .settings-grid input,
-        body[data-theme="light"] .settings-grid select {
+        body[data-theme="light"] .settings-grid select,
+        body[data-theme="light"] .folder-input {
             background: white;
             border: 1px solid #ccc;
             color: #333;
@@ -596,7 +609,8 @@
         }
 
         body[data-theme="dark"] .settings-grid input,
-        body[data-theme="dark"] .settings-grid select {
+        body[data-theme="dark"] .settings-grid select,
+        body[data-theme="dark"] .folder-input {
             background: rgba(6, 9, 19, 0.7);
             border: 1px solid rgba(139, 147, 181, 0.35);
             font-family: var(--mono);
@@ -604,7 +618,8 @@
         }
 
         body[data-theme="dark"] .settings-grid input:focus,
-        body[data-theme="dark"] .settings-grid select:focus {
+        body[data-theme="dark"] .settings-grid select:focus,
+        body[data-theme="dark"] .folder-input:focus {
             outline: none;
             border-color: rgba(34, 211, 238, 0.6);
             box-shadow: 0 0 10px rgba(34, 211, 238, 0.25);
@@ -691,7 +706,8 @@
             <div class="card">
                 <h2>Recording</h2>
                 <p>Status: <span id="recordingStatus" class="status inactive">Stopped</span></p>
-                <p>Folder: <span id="outputDir">none yet</span></p>
+                <p>Folder: <input id="outputDir" type="text" class="folder-input"
+                                  title="<date> is replaced by the session start time"></p>
                 <div class="button-group">
                     <button class="btn-success" id="recordStartBtn" onclick="startRecording()" disabled>Start</button>
                     <button class="btn-warning" id="recordPauseBtn" onclick="pauseRecording()" disabled>Pause</button>
@@ -746,9 +762,6 @@
                 </label>
                 <label>Downsample
                     <input id="settingDownsample" type="number" step="1" min="1">
-                </label>
-                <label>Output folder
-                    <input id="settingOutputDir" type="text" placeholder="raw-<start time>">
                 </label>
             </div>
             <div class="button-group">
@@ -941,7 +954,18 @@
                 const recordingStatus = document.getElementById('recordingStatus');
                 const recordPauseBtn = document.getElementById('recordPauseBtn');
 
-                document.getElementById('outputDir').textContent = data.output_dir || 'none yet';
+                // While a session is active show its actual folder read-only;
+                // otherwise the field holds the editable folder template
+                const outputDirInput = document.getElementById('outputDir');
+                if (data.output_dir) {
+                    outputDirInput.value = data.output_dir;
+                    outputDirInput.disabled = true;
+                } else {
+                    outputDirInput.disabled = false;
+                    if (document.activeElement !== outputDirInput) {
+                        outputDirInput.value = data.output_template;
+                    }
+                }
 
                 if (data.recording) {
                     recordingStatus.textContent = 'Recording';
@@ -1018,7 +1042,13 @@
 
         async function startRecording() {
             try {
-                const response = await fetch('/api/recording/start', { method: 'POST' });
+                const response = await fetch('/api/recording/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        output_dir: document.getElementById('outputDir').value.trim()
+                    })
+                });
                 const data = await response.json();
                 if (!data.success) showError('recordingMessage', data.message);
                 updateStatus();
@@ -1094,9 +1124,6 @@
                 gainSelect.value = s.gain;
                 document.getElementById('settingFftLen').value = s.fft_len;
                 document.getElementById('settingDownsample').value = s.downsample;
-                // Blank means the default per-session timestamped folder
-                document.getElementById('settingOutputDir').value =
-                    s.output_dir === 'auto' ? '' : s.output_dir;
             } catch (error) {
                 console.error('Error loading settings:', error);
             }
@@ -1109,8 +1136,7 @@
                 sample_rate: getFrequencyField('settingSampleRate'),
                 gain: parseFloat(document.getElementById('settingGain').value),
                 fft_len: parseInt(document.getElementById('settingFftLen').value),
-                downsample: parseInt(document.getElementById('settingDownsample').value),
-                output_dir: document.getElementById('settingOutputDir').value.trim() || 'auto'
+                downsample: parseInt(document.getElementById('settingDownsample').value)
             };
             try {
                 const response = await fetch('/api/settings', {

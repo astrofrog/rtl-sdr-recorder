@@ -11,7 +11,7 @@ from typing import NamedTuple
 import numpy as np
 from astropy import units as u
 
-from rtlsdr_recorder.simulate import SimulatedRtlSdr
+from rtlsdr_recorder.simulate import R820T_GAINS, SimulatedRtlSdr
 
 __all__ = [
     "DEFAULT_CENTER_FREQ",
@@ -19,6 +19,7 @@ __all__ = [
     "DEFAULT_SAMPLE_RATE",
     "DEFAULT_GAIN",
     "DEFAULT_FFT_LEN",
+    "R820T_GAINS",
     "RecordingError",
     "SpectrumPair",
     "parse_frequency",

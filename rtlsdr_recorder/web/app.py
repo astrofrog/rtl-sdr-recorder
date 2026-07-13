@@ -10,6 +10,7 @@ from flask import Flask, jsonify, render_template, request
 
 from rtlsdr_recorder.analysis import reduce_spectrum_pairs
 from rtlsdr_recorder.recorder import (
+    R820T_GAINS,
     DEFAULT_CENTER_FREQ,
     DEFAULT_OFFSET_FREQ,
     DEFAULT_SAMPLE_RATE,
@@ -39,7 +40,7 @@ class WebRecorder:
         self.center_freq = center_freq
         self.offset_freq = offset_freq
         self.sample_rate = sample_rate
-        self.gain = gain
+        self.gain = min(R820T_GAINS, key=lambda g: abs(g - gain))
         self.fft_len = fft_len
         self.output_dir = output_dir
         self.session_dir = None
@@ -118,6 +119,13 @@ class WebRecorder:
         if self.recording_thread is not None:
             self.recording_thread.join(timeout=2)
 
+    def valid_gains(self):
+        """The gains supported by the connected dongle, or by the common
+        R820T tuner when none is connected."""
+        if self.sdr is not None and getattr(self.sdr, "valid_gains_db", None):
+            return list(self.sdr.valid_gains_db)
+        return list(R820T_GAINS)
+
     def get_settings(self):
         return {
             "center_freq": self.center_freq,
@@ -126,6 +134,7 @@ class WebRecorder:
             "gain": self.gain,
             "fft_len": self.fft_len,
             "downsample": self.downsample,
+            "valid_gains": self.valid_gains(),
         }
 
     def apply_settings(self, settings):
@@ -135,7 +144,8 @@ class WebRecorder:
             center_freq = parse_frequency(settings.get("center_freq", self.center_freq))
             offset_freq = parse_frequency(settings.get("offset_freq", self.offset_freq))
             sample_rate = parse_frequency(settings.get("sample_rate", self.sample_rate))
-            gain = float(settings.get("gain", self.gain))
+            gain = min(self.valid_gains(),
+                       key=lambda g: abs(g - float(settings.get("gain", self.gain))))
             fft_len = int(settings.get("fft_len", self.fft_len))
             downsample = int(settings.get("downsample", self.downsample))
             if sample_rate <= 0 or fft_len < 2 or not 1 <= downsample <= fft_len:

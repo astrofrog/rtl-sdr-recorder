@@ -75,9 +75,16 @@ def test_full_recording_cycle(client, tmp_path):
 
 def test_settings(client):
     settings = client.get("/api/settings").get_json()
+    valid_gains = settings.pop("valid_gains")
+    assert valid_gains[0] == 0.0
+    assert valid_gains[-1] == 49.6
     assert settings == {"center_freq": 1420e6, "offset_freq": 1416e6,
                         "sample_rate": 2.4e6, "gain": 49.6, "fft_len": 4096,
                         "downsample": 10}
+
+    # Gains snap to the nearest value supported by the dongle
+    assert client.post("/api/settings", json={"gain": 30}).get_json()["success"]
+    assert client.get("/api/settings").get_json()["gain"] == 29.7
 
     response = client.post("/api/settings", json={"offset_freq": "1417 MHz",
                                                   "downsample": 8})

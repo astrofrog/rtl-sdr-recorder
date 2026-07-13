@@ -4,17 +4,34 @@ Simulated RTL-SDR dongle for testing without hardware.
 
 import numpy as np
 
-__all__ = ["SimulatedRtlSdr"]
+__all__ = ["R820T_GAINS", "SimulatedRtlSdr"]
+
+# Gains (in dB) supported by the common R820T/R820T2 tuner, also used as the
+# fallback when no real dongle is connected to query
+R820T_GAINS = [0.0, 0.9, 1.4, 2.7, 3.7, 7.7, 8.7, 12.5, 14.4, 15.7, 16.6,
+               19.7, 20.7, 22.9, 25.4, 28.0, 29.7, 32.8, 33.8, 36.4, 37.2,
+               38.6, 40.2, 42.1, 43.4, 43.9, 44.5, 48.0, 49.6]
 
 
 class SimulatedRtlSdr:
     """Simulated RTL-SDR dongle with the same interface as `rtlsdr.RtlSdr`."""
+
+    valid_gains_db = R820T_GAINS
 
     def __init__(self):
         self.sample_rate = 2.4e6
         self.center_freq = 1420e6
         self.gain = 49.6
         self.bias_tee = False
+
+    @property
+    def gain(self):
+        return self._gain
+
+    @gain.setter
+    def gain(self, value):
+        # Like the real dongle, snap to the nearest supported gain
+        self._gain = min(self.valid_gains_db, key=lambda g: abs(g - value))
 
     def read_samples(self, num_samples):
         """

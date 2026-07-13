@@ -1,7 +1,16 @@
+import threading
+import webbrowser
+
 import click
 from astropy import units as u
 
 from rtlsdr_recorder.recorder import DEFAULT_GAIN, DEFAULT_FFT_LEN, parse_frequency
+
+
+def _schedule_browser_open(url):
+    # Open the browser shortly after starting so the server is listening by
+    # the time it connects
+    threading.Timer(1, webbrowser.open, args=[url]).start()
 
 
 class FrequencyType(click.ParamType):
@@ -28,7 +37,8 @@ FREQUENCY = FrequencyType()
 @click.option("--offset-freq", type=FREQUENCY, default="1416MHz", show_default=True,
               help="Off-frequency center frequency (plain numbers are Hz).")
 @click.option("--sample-rate", type=FREQUENCY, default="2.4MHz", show_default=True,
-              help="Sample rate (plain numbers are Hz).")
+              help="Sample rate, equal to the observed bandwidth "
+                   "(plain numbers are Hz).")
 @click.option("--gain", default=DEFAULT_GAIN, show_default=True,
               help="Tuner gain in dB.")
 @click.option("--fft-len", default=DEFAULT_FFT_LEN, show_default=True,
@@ -38,14 +48,19 @@ FREQUENCY = FrequencyType()
                    "each session uses a new raw-YYYY-MM-DD-HH-MM-SS directory.")
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=5000, show_default=True)
+@click.option("--no-browser", is_flag=True,
+              help="Do not open the web app in a browser.")
 def main(simulated, center_freq, offset_freq, sample_rate, gain, fft_len,
-         output_dir, host, port):
+         output_dir, host, port, no_browser):
     """Start the web app for recording HI spectra with an RTL-SDR dongle."""
     from rtlsdr_recorder.web import create_app
 
     app = create_app(simulated=simulated, center_freq=center_freq,
                      offset_freq=offset_freq, sample_rate=sample_rate, gain=gain,
                      fft_len=fft_len, output_dir=output_dir)
+    if not no_browser:
+        browser_host = "127.0.0.1" if host == "0.0.0.0" else host
+        _schedule_browser_open(f"http://{browser_host}:{port}")
     try:
         app.run(host=host, port=port)
     finally:

@@ -73,14 +73,23 @@ def test_full_recording_cycle(client, tmp_path):
     assert list(tmp_path.glob("*_on.npy"))
 
 
-def test_settings(client):
+def test_settings(client, tmp_path):
     settings = client.get("/api/settings").get_json()
     valid_gains = settings.pop("valid_gains")
     assert valid_gains[0] == 0.0
     assert valid_gains[-1] == 49.6
     assert settings == {"center_freq": 1420e6, "offset_freq": 1416e6,
                         "sample_rate": 2.4e6, "gain": 49.6, "fft_len": 4096,
-                        "downsample": 10}
+                        "downsample": 10, "output_dir": str(tmp_path)}
+
+    # The output folder can be customized, and blank means the default
+    # timestamped scheme
+    assert client.post("/api/settings",
+                       json={"output_dir": "custom"}).get_json()["success"]
+    assert client.get("/api/settings").get_json()["output_dir"] == "custom"
+    assert client.post("/api/settings",
+                       json={"output_dir": "  "}).get_json()["success"]
+    assert client.get("/api/settings").get_json()["output_dir"] == "auto"
 
     # Gains snap to the nearest value supported by the dongle
     assert client.post("/api/settings", json={"gain": 30}).get_json()["success"]
@@ -172,6 +181,14 @@ def test_sessions(tmp_path, monkeypatch):
         assert client.get("/api/status").get_json()["output_dir"] == "session-2"
         wait_for_spectrum(client)
 
+        # A custom folder name can be set through the settings
+        assert client.post("/api/settings",
+                           json={"output_dir": "custom"}).get_json()["success"]
+        assert client.post("/api/recording/start").get_json()["success"]
+        assert client.get("/api/status").get_json()["output_dir"] == "custom"
+        wait_for_spectrum(client)
+
     app.config["RECORDER"].disconnect()
     assert list((tmp_path / "session-1").glob("*_on.npy"))
     assert list((tmp_path / "session-2").glob("*_on.npy"))
+    assert list((tmp_path / "custom").glob("*_on.npy"))

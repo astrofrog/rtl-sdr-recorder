@@ -747,6 +747,9 @@
                 <label>Downsample
                     <input id="settingDownsample" type="number" step="1" min="1">
                 </label>
+                <label>Output folder
+                    <input id="settingOutputDir" type="text" placeholder="raw-<start time>">
+                </label>
             </div>
             <div class="button-group">
                 <button class="btn-primary" onclick="applySettings()">Apply (resets session)</button>
@@ -1091,6 +1094,9 @@
                 gainSelect.value = s.gain;
                 document.getElementById('settingFftLen').value = s.fft_len;
                 document.getElementById('settingDownsample').value = s.downsample;
+                // Blank means the default per-session timestamped folder
+                document.getElementById('settingOutputDir').value =
+                    s.output_dir === 'auto' ? '' : s.output_dir;
             } catch (error) {
                 console.error('Error loading settings:', error);
             }
@@ -1103,7 +1109,8 @@
                 sample_rate: getFrequencyField('settingSampleRate'),
                 gain: parseFloat(document.getElementById('settingGain').value),
                 fft_len: parseInt(document.getElementById('settingFftLen').value),
-                downsample: parseInt(document.getElementById('settingDownsample').value)
+                downsample: parseInt(document.getElementById('settingDownsample').value),
+                output_dir: document.getElementById('settingOutputDir').value.trim() || 'auto'
             };
             try {
                 const response = await fetch('/api/settings', {

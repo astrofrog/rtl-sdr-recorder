@@ -135,6 +135,7 @@ class WebRecorder:
             "fft_len": self.fft_len,
             "downsample": self.downsample,
             "valid_gains": self.valid_gains(),
+            "output_dir": self.output_dir,
         }
 
     def apply_settings(self, settings):
@@ -148,6 +149,7 @@ class WebRecorder:
                        key=lambda g: abs(g - float(settings.get("gain", self.gain))))
             fft_len = int(settings.get("fft_len", self.fft_len))
             downsample = int(settings.get("downsample", self.downsample))
+            output_dir = str(settings.get("output_dir", self.output_dir)).strip() or "auto"
             if sample_rate <= 0 or fft_len < 2 or not 1 <= downsample <= fft_len:
                 raise ValueError("sample rate, FFT length, and downsample "
                                  "factor must be positive (and the downsample "
@@ -162,6 +164,7 @@ class WebRecorder:
         self.gain = gain
         self.fft_len = fft_len
         self.downsample = downsample
+        self.output_dir = output_dir
         self.frequencies = frequency_array(center_freq, sample_rate, fft_len)
         self.off_frequencies = frequency_array(offset_freq, sample_rate, fft_len)
 

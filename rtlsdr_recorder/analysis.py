@@ -95,7 +95,7 @@ class ReducedSpectra(NamedTuple):
 
 
 def reduce_spectrum_pairs(spectra_on, spectra_off, downsample=10, sigma=3,
-                          center_width=39, clip_difference=False,
+                          center_width=39, clip_difference=True,
                           center_freq=DEFAULT_CENTER_FREQ,
                           sample_rate=DEFAULT_SAMPLE_RATE):
     """
@@ -104,11 +104,15 @@ def reduce_spectrum_pairs(spectra_on, spectra_off, downsample=10, sigma=3,
     `ReducedSpectra` with the frequencies (in MHz), the averaged on and off
     spectra, and the difference spectrum.
 
-    By default the sigma clipping is done on the individual on and off
-    spectra and the difference is that of the averages; with
-    ``clip_difference=True`` the difference spectrum is instead reduced from
-    the per-pair on minus off differences, clipping those directly (the
-    returned on and off averages are always clipped individually).
+    By default (``clip_difference=True``) the difference spectrum is reduced
+    from the per-pair on minus off differences: differencing first removes
+    the bandpass shape, so the sigma clipping operates on flat spectra,
+    making it more sensitive to RFI and robust to bandpass changes over
+    time. With ``clip_difference=False`` the on and off spectra are instead
+    clipped individually and the difference is that of the averages (a very
+    strong line cannot then be clipped as part of the signal, which with
+    per-pair clipping is conceivable in principle). The returned on and off
+    averages are always clipped individually.
     """
     if not spectra_on:
         raise ValueError("No spectra to reduce")

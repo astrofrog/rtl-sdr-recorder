@@ -72,11 +72,10 @@ def test_average_spectra_fully_masked_channel(recwarn):
 
 
 def test_reduce_spectra(raw_dir):
+    # The default reduction clips the per-pair differences
     reduced = reduce_spectra(str(raw_dir))
     assert (len(reduced.frequencies) == len(reduced.spectrum_on)
             == len(reduced.spectrum_off) == len(reduced.spectrum_diff) == 409)
-    np.testing.assert_allclose(reduced.spectrum_diff,
-                               reduced.spectrum_on - reduced.spectrum_off)
     assert np.isnan(reduced.spectrum_diff[204])  # masked DC channels
     assert np.isfinite(reduced.spectrum_diff[100])
     # The simulated HI line should be visible in the difference spectrum
@@ -86,9 +85,13 @@ def test_reduce_spectra(raw_dir):
                 > np.nanmean(reduced.spectrum_diff[~line]))
 
 
-def test_reduce_spectra_clip_difference(raw_dir):
-    reduced = reduce_spectra(str(raw_dir), clip_difference=True)
+def test_reduce_spectra_clip_individual(raw_dir):
+    # With clip_difference=False the difference is that of the on and off
+    # averages, which are clipped individually
+    reduced = reduce_spectra(str(raw_dir), clip_difference=False)
     assert len(reduced.frequencies) == len(reduced.spectrum_diff) == 409
+    np.testing.assert_allclose(reduced.spectrum_diff,
+                               reduced.spectrum_on - reduced.spectrum_off)
     assert np.isnan(reduced.spectrum_diff[204])
     assert np.isfinite(reduced.spectrum_diff[100])
 
